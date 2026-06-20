@@ -109,8 +109,23 @@ button{-webkit-appearance:none;appearance:none;font-family:inherit}
 .modal-btn.cancel{background:#f0f0f0;border-color:#ccc;color:#555}
 /* lock */
 body.locked .gen-btn,body.locked .season-add-btn,body.locked .ledger-btn{pointer-events:none;opacity:.35}
-body.locked .tab[data-tab="attend"],body.locked .tab[data-tab="positions"],body.locked .tab[data-tab="pgorder"]{pointer-events:none;opacity:.35}
+body.locked .tab[data-tab="attend"],body.locked .tab[data-tab="positions"],body.locked .tab[data-tab="pgorder"],body.locked .tab[data-tab="settings"]{pointer-events:none;opacity:.35}
 body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
+/* league settings */
+.league-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:2px solid #ddd;background:#fff;cursor:pointer;transition:all .15s;user-select:none}
+.league-card.selected{border-color:#378ADD;background:#f0f8ff}
+.league-card-icon{font-size:24px;flex-shrink:0}
+.league-card-body{flex:1}
+.league-card-name{font-size:14px;font-weight:600;color:#1a1a1a}
+.league-card-desc{font-size:12px;color:#888;margin-top:2px}
+.league-card-check{font-size:18px;color:#378ADD;opacity:0;flex-shrink:0}
+.league-card.selected .league-card-check{opacity:1}
+.setting-opt{flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:2px solid #ddd;background:#fff;color:#555;transition:all .15s}
+.setting-opt.selected{border-color:#378ADD;background:#f0f8ff;color:#0C447C;font-weight:600}
+/* priority */
+.pri-btn{padding:4px 9px;border-radius:999px;font-size:11px;font-weight:500;cursor:pointer;border:1.5px solid #ddd;background:#fff;color:#888;white-space:nowrap}
+.pri-btn.more{border-color:#1D9E75;background:#d4f0e4;color:#085041}
+.pri-btn.less{border-color:#BA7517;background:#fff8e8;color:#633806}
 </style>
 </head>
 <body>
@@ -142,6 +157,7 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
     <div class="tab" data-tab="attend">Attendance</div>
     <div class="tab" data-tab="positions">Positions</div>
     <div class="tab" data-tab="pgorder">PG order</div>
+    <div class="tab" data-tab="settings">⚙ League</div>
   </div>
 
   <!-- GAME VIEW -->
@@ -205,7 +221,7 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
 
   <!-- POSITIONS -->
   <div class="panel" id="panel-positions">
-    <div class="section-label">Allowed positions per player</div>
+    <div class="section-label">Allowed positions &amp; playing time priority</div>
     <div id="pos-editor"></div>
   </div>
 
@@ -214,6 +230,20 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
     <div class="section-label">PG rotation order — drag to reorder</div>
     <div id="pg-order-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     <div style="font-size:12px;color:#888;margin-top:8px">Players run consecutive slots in this order</div>
+  </div>
+
+  <!-- LEAGUE SETTINGS -->
+  <div class="panel" id="panel-settings">
+    <div class="section-label">League</div>
+    <div id="league-cards" style="display:flex;flex-direction:column;gap:10px;margin-bottom:1.25rem"></div>
+
+    <div class="section-label">Sub rotation interval</div>
+    <div style="display:flex;gap:8px;margin-bottom:1.25rem">
+      <button class="setting-opt" data-action="set-slot-mins" data-val="4" id="opt-4min">4 min subs</button>
+      <button class="setting-opt" data-action="set-slot-mins" data-val="8" id="opt-8min">8 min subs</button>
+    </div>
+
+    <div id="settings-summary" style="background:#fff;border-radius:10px;border:.5px solid #ddd;padding:.75rem 1rem;font-size:13px;color:#555;line-height:1.7"></div>
   </div>
 
   <!-- DATE MODAL -->
@@ -234,14 +264,35 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
 <script>
 // ─── Data ──────────────────────────────────────────────────────────────────
 const ALL=['Jordan','Timothy','Henry','Walker','Nathan','Cora','Judah','Evelyn','Evalyn','Tommy'];
-const SLOTS=8, SLOT_MINS=4, SLOTS_PER_Q=2;
 const POS_NAMES=['PG','2','3','4','5'];
+
+// League definitions
+const LEAGUES=[
+  {id:'ymca', name:'YMCA', icon:'🏀', desc:'2 × 16 min halves (32 min total)', totalMins:32, periods:2, periodName:'Half'},
+  {id:'rec8',  name:'Rec League (8 min qtrs)', icon:'🏟️', desc:'4 × 8 min quarters (32 min total)', totalMins:32, periods:4, periodName:'Quarter'},
+  {id:'rec6',  name:'Rec League (6 min qtrs)', icon:'🏟️', desc:'4 × 6 min quarters (24 min total)', totalMins:24, periods:4, periodName:'Quarter'},
+];
+
+let leagueId='ymca';
+let slotMins=4; // 4 or 8
+
+// Derived from league + slotMins
+function getLeague(){return LEAGUES.find(l=>l.id===leagueId)||LEAGUES[0];}
+function getTotalSlots(){return getLeague().totalMins/slotMins;}
+function getSlotsPerPeriod(){return getLeague().totalMins/getLeague().periods/slotMins;}
+function getPeriodLabel(slotIdx){
+  const lg=getLeague(),spp=getSlotsPerPeriod(),p=Math.floor(slotIdx/spp)+1;
+  return lg.periodName+' '+p;
+}
+function isBreak(slotIdx){return slotIdx>0&&slotIdx%getSlotsPerPeriod()===0;}
+function isHalfTime(slotIdx){const lg=getLeague();return lg.periods===4&&slotIdx===lg.totalMins/slotMins/2;}
 
 let absent=new Set(['Nathan']);
 let allowedPos={
   Jordan:[1,2,3],Timothy:[2,3],Henry:[3,4,5],Walker:[1,2,3],Nathan:[2,3,4],
   Cora:[1,2,3],Judah:[1,2,3],Evelyn:[3,4,5],Evalyn:[3,4,5],Tommy:[4,5]
 };
+let playerPriority={}; // player -> 'more' | 'less' | 'normal'
 let pgOrder=['Jordan','Cora','Walker','Judah'];
 let schedule=[];
 let currentSlot=0;
@@ -249,13 +300,12 @@ let seasonGames=[];
 let viewingGame='totals';
 
 function present(){return ALL.filter(p=>!absent.has(p));}
-function qLabel(s){return s<2?'Quarter 1':s<4?'Quarter 2':s<6?'Quarter 3':'Quarter 4';}
-function isQStart(s){return s>0&&s%SLOTS_PER_Q===0;}
 function canPlay(p,pos){return allowedPos[p]&&allowedPos[p].includes(pos);}
+function getPriority(p){return playerPriority[p]||'normal';}
 
 // ─── Persist ───────────────────────────────────────────────────────────────
 function persist(){
-  try{localStorage.setItem('jackals_v1',JSON.stringify({absent:[...absent],allowedPos,pgOrder,schedule,currentSlot,seasonGames}));}catch(e){}
+  try{localStorage.setItem('jackals_v1',JSON.stringify({absent:[...absent],allowedPos,playerPriority,pgOrder,schedule,currentSlot,seasonGames,leagueId,slotMins}));}catch(e){}
 }
 function restore(){
   try{
@@ -263,10 +313,13 @@ function restore(){
     if(!d)return;
     absent=new Set(d.absent||[]);
     if(d.allowedPos)allowedPos=d.allowedPos;
+    if(d.playerPriority)playerPriority=d.playerPriority;
     if(d.pgOrder)pgOrder=d.pgOrder;
     if(d.schedule)schedule=d.schedule;
     if(d.currentSlot!=null)currentSlot=d.currentSlot;
     if(d.seasonGames)seasonGames=d.seasonGames;
+    if(d.leagueId)leagueId=d.leagueId;
+    if(d.slotMins)slotMins=d.slotMins;
   }catch(e){}
 }
 
@@ -280,6 +333,7 @@ function switchTab(id){
   if(id==='pgorder')renderPgOrder();
   if(id==='list')renderList();
   if(id==='season')renderSeason();
+  if(id==='settings')renderSettings();
 }
 
 // ─── Attendance ────────────────────────────────────────────────────────────
@@ -300,23 +354,43 @@ function renderAttend(){
 function renderPosEditor(){
   const el=document.getElementById('pos-editor');
   el.innerHTML='';
+  // Column headers
+  const hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;align-items:center;gap:10px;padding:4px 0 8px;border-bottom:1.5px solid #e0e0e0;margin-bottom:4px';
+  hdr.innerHTML='<div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.05em;min-width:72px">Player</div>'
+    +'<div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.05em;flex:1">Positions</div>'
+    +'<div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.05em;min-width:130px;text-align:right">Play time</div>';
+  el.appendChild(hdr);
+
   ALL.forEach(p=>{
     const row=document.createElement('div');
     row.className='player-row';
+    row.style.alignItems='center';
     const nm=document.createElement('div');
     nm.className='pname';nm.textContent=p;
     const togs=document.createElement('div');
-    togs.className='pos-toggles';
+    togs.className='pos-toggles';togs.style.flex='1';
     ['1','2','3','4','5'].forEach(pos=>{
       const btn=document.createElement('div');
       btn.className='ptog '+(allowedPos[p]&&allowedPos[p].includes(+pos)?'on':'');
       btn.textContent=pos==='1'?'PG':pos;
-      btn.dataset.action='toggle-pos';
-      btn.dataset.player=p;
-      btn.dataset.pos=pos;
+      btn.dataset.action='toggle-pos';btn.dataset.player=p;btn.dataset.pos=pos;
       togs.appendChild(btn);
     });
-    row.appendChild(nm);row.appendChild(togs);el.appendChild(row);
+
+    // Priority buttons
+    const pri=getPriority(p);
+    const priWrap=document.createElement('div');
+    priWrap.style.cssText='display:flex;gap:4px;flex-shrink:0';
+    ['more','normal','less'].forEach(level=>{
+      const pb=document.createElement('div');
+      pb.className='pri-btn'+(pri===level?' '+level:'');
+      pb.textContent=level==='more'?'▲ More':level==='less'?'▼ Less':'—';
+      pb.dataset.action='set-priority';pb.dataset.player=p;pb.dataset.level=level;
+      priWrap.appendChild(pb);
+    });
+
+    row.appendChild(nm);row.appendChild(togs);row.appendChild(priWrap);el.appendChild(row);
   });
 }
 
@@ -339,47 +413,82 @@ function renderPgOrder(){
 
 // ─── Generate schedule ─────────────────────────────────────────────────────
 function buildPgQueue(pgs){
+  const SLOTS=getTotalSlots();
   const n=pgs.length,q=[],base=Math.floor(SLOTS/n),extra=SLOTS%n;
   pgs.forEach((pg,i)=>{const cnt=i<extra?base+1:base;for(let j=0;j<cnt;j++)q.push(pg);});
   return q;
 }
 
 function generateSchedule(){
+  const SLOTS=getTotalSlots();
   const pp=present();
   document.getElementById('warn-box').innerHTML='';
   if(pp.length<5){document.getElementById('warn-box').innerHTML='<div class="warn">Need at least 5 present players.</div>';return;}
   const pgE=pgOrder.filter(p=>pp.includes(p));
   if(!pgE.length){document.getElementById('warn-box').innerHTML='<div class="warn">No PG-eligible players present.</div>';return;}
   const pgQ=buildPgQueue(pgE);
+
+  // Priority target multipliers: 'more'=1.25x target slots, 'less'=0.75x, 'normal'=1x
+  const totalCourtSlots=SLOTS*5;
+  const baseTarget=totalCourtSlots/pp.length;
+  const targetSlots={};
+  pp.forEach(p=>{
+    const pri=getPriority(p);
+    targetSlots[p]=pri==='more'?baseTarget*1.25:pri==='less'?baseTarget*0.75:baseTarget;
+  });
+  // Renormalize so targets sum to totalCourtSlots
+  const rawSum=pp.reduce((s,p)=>s+targetSlots[p],0);
+  pp.forEach(p=>targetSlots[p]=targetSlots[p]/rawSum*totalCourtSlots);
+
   const slots_played={};pp.forEach(p=>slots_played[p]=0);
   const lastPos={};
+  const sittingLast=new Set(); // players who sat out last slot
+
   schedule=[];
   for(let s=0;s<SLOTS;s++){
-    const qStart=isQStart(s);
+    const qStart=isBreak(s);
     const pg=pgQ[s];
     const prev=s>0?[schedule[s-1].p1,schedule[s-1].p2,schedule[s-1].p3,schedule[s-1].p4,schedule[s-1].p5]:[];
+
+    // Score function: lower = more preferred
+    // Primary: how far under their target (negative = needs court time)
+    // Secondary: no back-to-back bench (heavy penalty)
+    // Tertiary: position continuity
+    function score(p,pos){
+      let sc=(slots_played[p]-targetSlots[p])*10; // negative if needs mins
+      if(sittingLast.has(p)) sc-=15; // strongly prefer players who just sat
+      if(!qStart&&lastPos[p]===pos&&prev.includes(p)) sc-=3; // prefer same pos
+      return sc;
+    }
+
     let picks=[pg];
-    slots_played[pg]=(slots_played[pg]||0)+1;lastPos[pg]=1;
+    slots_played[pg]=(slots_played[pg]||0)+1;
+    lastPos[pg]=1;
+    sittingLast.delete(pg);
+
     for(let pos=2;pos<=5;pos++){
       const elig=pp.filter(p=>!picks.includes(p)&&canPlay(p,pos));
-      elig.sort((a,b)=>{
-        const d=slots_played[a]-slots_played[b];
-        if(Math.abs(d)>0.5)return d;
-        const ac=(!qStart&&lastPos[a]===pos&&prev.includes(a))?-1:0;
-        const bc=(!qStart&&lastPos[b]===pos&&prev.includes(b))?-1:0;
-        return ac-bc;
-      });
-      if(elig.length){picks.push(elig[0]);slots_played[elig[0]]++;lastPos[elig[0]]=pos;}
-      else{
-        const fb=pp.filter(p=>!picks.includes(p)).sort((a,b)=>slots_played[a]-slots_played[b]);
+      elig.sort((a,b)=>score(a,pos)-score(b,pos));
+      if(elig.length){
+        const chosen=elig[0];
+        picks.push(chosen);slots_played[chosen]++;lastPos[chosen]=pos;
+      } else {
+        // fallback: any not picked, ignoring position constraint
+        const fb=pp.filter(p=>!picks.includes(p)).sort((a,b)=>score(a,pos)-score(b,pos));
         if(fb.length){picks.push(fb[0]);slots_played[fb[0]]++;lastPos[fb[0]]=pos;}
       }
     }
     while(picks.length<5){const e=pp.find(p=>!picks.includes(p));if(e){picks.push(e);slots_played[e]++;}else break;}
-    const st=s*SLOT_MINS;
-    schedule.push({label:st+'–'+(st+SLOT_MINS),quarter:qLabel(s),qStart:isQStart(s),
+
+    const benchThisSlot=pp.filter(p=>!picks.slice(0,5).includes(p));
+    // Update sittingLast for next iteration
+    sittingLast.clear();
+    benchThisSlot.forEach(p=>sittingLast.add(p));
+
+    const st=s*slotMins;
+    schedule.push({label:st+'–'+(st+slotMins),quarter:getPeriodLabel(s),qStart:isBreak(s),isHalf:isHalfTime(s),
       p1:picks[0]||'—',p2:picks[1]||'—',p3:picks[2]||'—',p4:picks[3]||'—',p5:picks[4]||'—',
-      bench:pp.filter(p=>!picks.slice(0,5).includes(p))});
+      bench:benchThisSlot});
   }
   currentSlot=0;renderCourt();renderList();persist();
 }
@@ -403,8 +512,8 @@ function renderCourt(){
   document.getElementById('slot-quarter').textContent=r.quarter;
   document.getElementById('slot-time').textContent=r.label+' min';
   if(r.qStart){
-    const h=r.quarter==='Quarter 3';
-    banner.innerHTML='<div class="qbreak-banner">&#9201; '+(h?'Halftime — positions reset':'Quarter break — positions reset')+'</div>';
+    const label=r.isHalf?'Halftime — positions reset':r.quarter+' — break, positions reset';
+    banner.innerHTML='<div class="qbreak-banner">&#9201; '+label+'</div>';
   }else banner.innerHTML='';
   const oc=[r.p1,r.p2,r.p3,r.p4,r.p5];
   ['p1','p2','p3','p4','p5'].forEach((id,i)=>document.getElementById(id+'n').textContent=oc[i]||'—');
@@ -424,7 +533,7 @@ function renderCourt(){
     });
   }
   const mins={};present().forEach(p=>mins[p]=0);
-  schedule.forEach(s=>[s.p1,s.p2,s.p3,s.p4,s.p5].forEach(p=>{if(mins[p]!=null)mins[p]+=SLOT_MINS;}));
+  schedule.forEach(s=>[s.p1,s.p2,s.p3,s.p4,s.p5].forEach(p=>{if(mins[p]!=null)mins[p]+=slotMins;}));
   const mr=document.getElementById('mins-row');mr.innerHTML='';
   present().sort((a,b)=>mins[b]-mins[a]).forEach(p=>{
     const c=document.createElement('div');c.className='mchip'+(mins[p]<16?' low':'');c.textContent=p+': '+mins[p]+'m';mr.appendChild(c);
@@ -436,11 +545,11 @@ function renderList(){
   const el=document.getElementById('list-content');
   if(!schedule.length){el.innerHTML='<div style="color:#999;font-size:13px;padding:.5rem 0">Generate a schedule first.</div>';return;}
   const mins={};present().forEach(p=>mins[p]=0);
-  schedule.forEach(s=>[s.p1,s.p2,s.p3,s.p4,s.p5].forEach(p=>{if(mins[p]!=null)mins[p]+=SLOT_MINS;}));
+  schedule.forEach(s=>[s.p1,s.p2,s.p3,s.p4,s.p5].forEach(p=>{if(mins[p]!=null)mins[p]+=slotMins;}));
   let h='<table class="list-table"><thead><tr><th>Time</th><th>PG</th><th>2</th><th>3</th><th>4</th><th>5</th><th>Bench</th></tr></thead><tbody>';
   let lq='';
   schedule.forEach((r,i)=>{
-    if(r.quarter!==lq){if(lq!=='')h+='<tr class="q-break-label"><td colspan="7">&#9201; '+(r.quarter==='Quarter 3'?'Halftime / '+r.quarter:r.quarter)+'</td></tr>';lq=r.quarter;}
+    if(r.quarter!==lq){if(lq!==''){const breakLabel=r.isHalf?'Halftime':r.quarter;h+='<tr class="q-break-label"><td colspan="7">&#9201; '+breakLabel+'</td></tr>';}lq=r.quarter;}
     h+='<tr style="'+(i===currentSlot?'background:#f0f8ff;':'')+'">'
       +'<td class="lt-time">'+r.label+'</td>'
       +'<td class="lt-pg">'+r.p1+'</td>'
@@ -466,7 +575,7 @@ function calcGameStats(sched,absentArr){
   ALL.forEach(p=>{st[p]={pg:0,p2:0,p3:0,p4:0,p5:0,total:0,absent:as.has(p)};});
   sched.forEach(slot=>{
     [slot.p1,slot.p2,slot.p3,slot.p4,slot.p5].forEach((p,i)=>{
-      if(st[p]){const k=['pg','p2','p3','p4','p5'][i];st[p][k]+=SLOT_MINS;st[p].total+=SLOT_MINS;}
+      if(st[p]){const k=['pg','p2','p3','p4','p5'][i];st[p][k]+=slotMins;st[p].total+=slotMins;}
     });
   });
   return st;
@@ -548,6 +657,35 @@ function showMsg(msg,cls){
   setTimeout(()=>{if(el)el.innerHTML='';},4000);
 }
 
+// ─── League Settings ───────────────────────────────────────────────────────
+function renderSettings(){
+  const cards=document.getElementById('league-cards');
+  cards.innerHTML='';
+  LEAGUES.forEach(lg=>{
+    const card=document.createElement('div');
+    card.className='league-card'+(leagueId===lg.id?' selected':'');
+    card.dataset.action='set-league';
+    card.dataset.val=lg.id;
+    card.innerHTML='<div class="league-card-icon">'+lg.icon+'</div>'
+      +'<div class="league-card-body"><div class="league-card-name">'+lg.name+'</div>'
+      +'<div class="league-card-desc">'+lg.desc+'</div></div>'
+      +'<div class="league-card-check">✓</div>';
+    cards.appendChild(card);
+  });
+  document.getElementById('opt-4min').className='setting-opt'+(slotMins===4?' selected':'');
+  document.getElementById('opt-8min').className='setting-opt'+(slotMins===8?' selected':'');
+  updateSettingsSummary();
+}
+
+function updateSettingsSummary(){
+  const lg=getLeague();
+  const slots=getTotalSlots();
+  const spp=getSlotsPerPeriod();
+  document.getElementById('settings-summary').innerHTML=
+    '<strong>'+lg.name+'</strong> &middot; '+lg.totalMins+' min game &middot; '+lg.periods+' '+lg.periodName.toLowerCase()+'s<br>'
+    +'<strong>'+slotMins+'-min subs</strong> &middot; '+slots+' rotation slots &middot; '+spp+' slots per '+lg.periodName.toLowerCase();
+}
+
 // ─── Lock ──────────────────────────────────────────────────────────────────
 function toggleLock(){
   const locked=document.body.classList.toggle('locked');
@@ -580,6 +718,21 @@ document.addEventListener('click',function(e){
     const idx=el.dataset.idx;
     viewingGame=idx==='totals'?'totals':+idx;
     renderSeason();
+  }
+  else if(action==='set-priority'){
+    const p=el.dataset.player,level=el.dataset.level;
+    playerPriority[p]=level;
+    schedule=[];persist();renderPosEditor();
+  }
+  else if(action==='set-league'){
+    leagueId=el.dataset.val;
+    schedule=[];persist();renderSettings();
+    showMsg('League updated — re-optimize to rebuild schedule.','success-msg');
+  }
+  else if(action==='set-slot-mins'){
+    slotMins=+el.dataset.val;
+    schedule=[];persist();renderSettings();
+    showMsg('Sub interval updated — re-optimize to rebuild schedule.','success-msg');
   }
   else if(action==='del-confirm'){
     const conf=document.getElementById('del-confirm-'+el.dataset.idx);
@@ -634,6 +787,7 @@ restore();
 renderAttend();
 renderCourt();
 renderList();
+renderSettings();
 </script>
 </body>
 </html>
