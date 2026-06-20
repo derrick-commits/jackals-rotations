@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>The Jackals — Rotations</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#1a1a1a;min-height:100vh;-webkit-text-size-adjust:100%}
+button{-webkit-appearance:none;appearance:none;font-family:inherit}
+.app{max-width:600px;margin:0 auto;padding:1rem;padding-bottom:4rem}
+.panel{display:none}.panel.active{display:block}
+.section-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.06em;margin:1rem 0 6px}
+/* chips */
+.pchip{padding:6px 14px;border-radius:999px;font-size:14px;font-weight:500;border:1.5px solid;display:inline-block;user-select:none;cursor:pointer}
+.pchip.present{background:#fff;border-color:#378ADD;color:#0C447C}
+.pchip.absent{background:#eee;border-color:#ccc;color:#aaa;text-decoration:line-through}
+/* tabs */
+.tabs{display:flex;gap:4px;margin-bottom:1rem;flex-wrap:wrap}
+.tab{padding:8px 13px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #ccc;background:#fff;color:#555;white-space:nowrap}
+.tab.active{background:#dbeeff;border-color:#378ADD;color:#0C447C}
+/* top buttons */
+.gen-btn{padding:10px 6px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #378ADD;background:#dbeeff;color:#0C447C;flex:1;min-width:0}
+.season-add-btn{padding:10px 6px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #BA7517;background:#fff8e8;color:#633806;flex:1;min-width:0}
+.ledger-btn{padding:10px 6px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #ccc;background:#fff;color:#555;flex:1;min-width:0}
+.ledger-btn.active{background:#dbeeff;border-color:#378ADD;color:#0C447C}
+.lock-btn{padding:10px 12px;border-radius:8px;font-size:18px;cursor:pointer;border:1.5px solid #ccc;background:#fff;flex-shrink:0}
+.lock-btn.locked{border-color:#E24B4A;background:#ffe8e8}
+/* warn/success */
+.warn{font-size:12px;color:#993C1D;background:#ffe8df;padding:6px 10px;border-radius:8px;margin-bottom:.5rem}
+.success-msg{font-size:12px;color:#085041;background:#d4f0e4;padding:6px 10px;border-radius:8px;margin-bottom:.5rem}
+/* slot nav */
+.slot-nav{display:flex;align-items:center;gap:8px;margin-bottom:.75rem;justify-content:center}
+.nav-btn{width:48px;height:48px;border-radius:8px;border:1.5px solid #ccc;background:#fff;color:#1a1a1a;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.nav-btn:disabled{opacity:.3}
+.slot-meta{text-align:center;flex:1}
+.slot-quarter{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.slot-time{font-size:17px;font-weight:600;color:#1a1a1a}
+/* game card */
+.game-card{background:#fff;border-radius:12px;border:.5px solid #ddd;overflow:hidden}
+.card-section-title{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem}
+.court-section{padding:1rem;border-bottom:.5px solid #e8e8e8}
+.bench-section{padding:.75rem 1rem;border-bottom:.5px solid #e8e8e8}
+.bench-kids{display:flex;flex-direction:column;gap:5px;margin-top:.4rem}
+.bench-kid{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;background:#f5f5f5;border:.5px solid #e0e0e0}
+.bk-name{font-size:15px;font-weight:600;min-width:75px;color:#1a1a1a}
+.bk-subinfo{font-size:13px;color:#085041;font-weight:500}
+.bk-wait{font-size:12px;color:#999}
+.mins-section{padding:.75rem 1rem}
+.mins-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:.4rem}
+.mchip{font-size:11px;padding:4px 9px;border-radius:999px;background:#f0f0f0;border:.5px solid #ddd;color:#555}
+.mchip.low{border-color:#E24B4A;color:#791F1F;background:#ffe8e8}
+.qbreak-banner{background:#fff8e8;border-left:3px solid #EF9F27;padding:6px 10px;font-size:12px;color:#633806;font-weight:500;margin-bottom:.5rem;border-radius:0 8px 8px 0}
+.on-name{font-size:13px;font-weight:600;fill:#0C447C}
+.on-pos{font-size:10px;fill:#185FA5}
+/* list */
+.list-table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;border:.5px solid #ddd;font-size:13px}
+.list-table th{padding:8px 8px;text-align:left;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;border-bottom:1.5px solid #e0e0e0;background:#fafafa;white-space:nowrap}
+.list-table td{padding:9px 8px;border-bottom:.5px solid #efefef;vertical-align:top;line-height:1.4}
+.list-table tr:last-child td{border-bottom:none}
+.list-table tr.q-break-label td{background:#fff8e8;padding:4px 8px;font-size:11px;font-weight:600;color:#633806;border-bottom:.5px solid #f0e0c0}
+.lt-time{font-weight:700;color:#1a1a1a;white-space:nowrap}
+.lt-pg{color:#085041;font-weight:600}
+.lt-player{color:#0C447C}
+.lt-bench{color:#999;font-size:12px}
+.list-mins{margin-top:1rem;background:#fff;border-radius:12px;border:.5px solid #ddd;padding:.75rem 1rem}
+/* positions */
+.player-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:.5px solid #e0e0e0}
+.player-row:last-child{border-bottom:none}
+.pname{font-size:13px;font-weight:500;min-width:72px}
+.pos-toggles{display:flex;gap:5px;flex-wrap:wrap}
+.ptog{padding:5px 10px;border-radius:999px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #ccc;background:#fff;color:#777;user-select:none}
+.ptog.on{background:#dbeeff;border-color:#378ADD;color:#0C447C}
+/* pg order */
+.pg-chip{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #1D9E75;background:#d4f0e4;color:#085041;user-select:none;margin-bottom:4px}
+/* season */
+.season-game-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1rem}
+.sgame-tab{padding:6px 10px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #ccc;background:#fff;color:#555;white-space:nowrap;line-height:1.4;text-align:center}
+.sgame-tab.active{background:#dbeeff;border-color:#378ADD;color:#0C447C}
+.sgame-tab.totals{background:#f5f0ff;border-color:#7F77DD;color:#3C3489}
+.sgame-tab.totals.active{background:#EEEDFE;border-color:#534AB7;color:#26215C}
+.season-table-wrap{overflow-x:auto;border-radius:12px;border:.5px solid #ddd}
+.season-table{width:100%;border-collapse:collapse;background:#fff;font-size:12px;min-width:400px}
+.season-table th{padding:7px 8px;text-align:center;font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;border-bottom:1.5px solid #e0e0e0;background:#fafafa;white-space:nowrap}
+.season-table th.left{text-align:left}
+.season-table td{padding:8px 8px;border-bottom:.5px solid #efefef;text-align:center;color:#444}
+.season-table td.pname-cell{text-align:left;font-weight:600;color:#1a1a1a;white-space:nowrap}
+.season-table td.total-cell{font-weight:700;color:#0C447C;background:#f5faff}
+.season-table td.season-total{font-weight:700;color:#3C3489;background:#f5f0ff}
+.season-table tr:last-child td{border-bottom:none}
+.season-table td.pos-cell{font-size:11px;color:#555}
+.absent-cell{color:#bbb;font-style:italic;font-size:11px}
+.del-game-btn{padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid #E24B4A;background:#ffe8e8;color:#791F1F;font-weight:500}
+.del-confirm{display:none;align-items:center;gap:5px;background:#ffe8e8;padding:4px 8px;border-radius:8px;border:1px solid #E24B4A;flex-wrap:nowrap}
+.del-confirm.show{display:flex}
+.del-yes{padding:3px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid #E24B4A;background:#E24B4A;color:#fff;font-weight:600}
+.del-no{padding:3px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid #ccc;background:#fff;color:#555}
+.no-season{color:#999;font-size:13px;padding:.5rem 0}
+/* modal */
+.modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+.modal-backdrop.open{display:flex}
+.modal-box{background:#fff;border-radius:14px;padding:1.5rem;width:88%;max-width:320px}
+.modal-title{font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:1rem}
+.modal-label{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.modal-date{width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid #ccc;font-size:16px;margin-bottom:1.25rem;color:#1a1a1a;background:#fff}
+.modal-btns{display:flex;gap:8px}
+.modal-btn{flex:1;padding:11px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:1.5px solid}
+.modal-btn.confirm{background:#d4f0e4;border-color:#1D9E75;color:#085041}
+.modal-btn.cancel{background:#f0f0f0;border-color:#ccc;color:#555}
+/* lock */
+body.locked .gen-btn,body.locked .season-add-btn,body.locked .ledger-btn{pointer-events:none;opacity:.35}
+body.locked .tab[data-tab="attend"],body.locked .tab[data-tab="positions"],body.locked .tab[data-tab="pgorder"]{pointer-events:none;opacity:.35}
+body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- Title -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:.6rem">
+    <span style="font-size:28px;line-height:1">&#127936;</span>
+    <div>
+      <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.1em">YMCA Rotations</div>
+      <div style="font-size:21px;font-weight:700;color:#1a1a1a;line-height:1.15">The Jackals</div>
+    </div>
+  </div>
+
+  <!-- Action row -->
+  <div style="display:flex;gap:6px;margin-bottom:.75rem;align-items:stretch">
+    <button class="gen-btn" id="btn-reopt">&#8635; Re-optimize</button>
+    <button class="season-add-btn" id="btn-season-add">&#43; Season</button>
+    <button class="ledger-btn" id="btn-ledger">&#128200; Ledger</button>
+    <button class="lock-btn" id="lock-btn" title="Lock/unlock">&#128275;</button>
+  </div>
+
+  <div id="save-msg"></div>
+
+  <!-- Tab row -->
+  <div class="tabs" id="tab-row">
+    <div class="tab active" data-tab="court">Game view</div>
+    <div class="tab" data-tab="list">List view</div>
+    <div class="tab" data-tab="attend">Attendance</div>
+    <div class="tab" data-tab="positions">Positions</div>
+    <div class="tab" data-tab="pgorder">PG order</div>
+  </div>
+
+  <!-- GAME VIEW -->
+  <div class="panel active" id="panel-court">
+    <div id="warn-box"></div>
+    <div class="slot-nav">
+      <button class="nav-btn" id="prev-btn">&#8592;</button>
+      <div class="slot-meta">
+        <div class="slot-quarter" id="slot-quarter">—</div>
+        <div class="slot-time" id="slot-time">—</div>
+      </div>
+      <button class="nav-btn" id="next-btn">&#8594;</button>
+    </div>
+    <div id="qbreak-banner"></div>
+    <div class="game-card">
+      <div class="court-section">
+        <div class="card-section-title">On court</div>
+        <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">
+          <rect x="6" y="6" width="308" height="208" rx="3" fill="none" stroke="#ccc" stroke-width="1"/>
+          <rect x="110" y="6" width="100" height="105" fill="none" stroke="#ccc" stroke-width="1"/>
+          <path d="M110 120 A50 50 0 0 0 210 120" fill="none" stroke="#ccc" stroke-width="1"/>
+          <circle cx="160" cy="145" r="40" fill="none" stroke="#ccc" stroke-width="1"/>
+          <line x1="136" y1="14" x2="184" y2="14" stroke="#ccc" stroke-width="1.2"/>
+          <circle cx="160" cy="34" r="14" fill="none" stroke="#ccc" stroke-width="1"/>
+          <circle cx="160" cy="26" r="2.5" fill="#ccc"/>
+          <path d="M24 175 Q6 175 6 158 Q6 141 24 141" fill="none" stroke="#ccc" stroke-width="1"/>
+          <path d="M296 175 Q314 175 314 158 Q314 141 296 141" fill="none" stroke="#ccc" stroke-width="1"/>
+          <g><circle cx="50" cy="60" r="28" fill="#dbeeff" stroke="#378ADD" stroke-width="1.5"/><text class="on-pos" x="50" y="53" text-anchor="middle" dominant-baseline="middle">4</text><text id="p4n" class="on-name" x="50" y="66" text-anchor="middle" dominant-baseline="middle">—</text></g>
+          <g><circle cx="270" cy="60" r="28" fill="#dbeeff" stroke="#378ADD" stroke-width="1.5"/><text class="on-pos" x="270" y="53" text-anchor="middle" dominant-baseline="middle">5</text><text id="p5n" class="on-name" x="270" y="66" text-anchor="middle" dominant-baseline="middle">—</text></g>
+          <g><circle cx="50" cy="165" r="28" fill="#dbeeff" stroke="#378ADD" stroke-width="1.5"/><text class="on-pos" x="50" y="158" text-anchor="middle" dominant-baseline="middle">2</text><text id="p2n" class="on-name" x="50" y="171" text-anchor="middle" dominant-baseline="middle">—</text></g>
+          <g><circle cx="270" cy="165" r="28" fill="#dbeeff" stroke="#378ADD" stroke-width="1.5"/><text class="on-pos" x="270" y="158" text-anchor="middle" dominant-baseline="middle">3</text><text id="p3n" class="on-name" x="270" y="171" text-anchor="middle" dominant-baseline="middle">—</text></g>
+          <g><circle cx="160" cy="198" r="28" fill="#d4f0e4" stroke="#1D9E75" stroke-width="1.5"/><text class="on-pos" x="160" y="191" text-anchor="middle" dominant-baseline="middle" fill="#0F6E56">PG</text><text id="p1n" class="on-name" x="160" y="204" text-anchor="middle" dominant-baseline="middle" fill="#085041">—</text></g>
+        </svg>
+      </div>
+      <div class="bench-section">
+        <div class="card-section-title">Bench</div>
+        <div id="bench-kids"><div class="bk-wait" style="padding:6px 0">Generate a schedule first</div></div>
+      </div>
+      <div class="mins-section">
+        <div class="card-section-title">Minutes this game</div>
+        <div class="mins-row" id="mins-row"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div class="panel" id="panel-list">
+    <div id="list-content"><div style="color:#999;font-size:13px;padding:.5rem 0">Generate a schedule first.</div></div>
+  </div>
+
+  <!-- SEASON VIEW -->
+  <div class="panel" id="panel-season">
+    <div id="season-content"></div>
+  </div>
+
+  <!-- ATTENDANCE -->
+  <div class="panel" id="panel-attend">
+    <div class="section-label">Tap to mark absent</div>
+    <div id="attend-grid" style="display:flex;flex-wrap:wrap;gap:7px"></div>
+  </div>
+
+  <!-- POSITIONS -->
+  <div class="panel" id="panel-positions">
+    <div class="section-label">Allowed positions per player</div>
+    <div id="pos-editor"></div>
+  </div>
+
+  <!-- PG ORDER -->
+  <div class="panel" id="panel-pgorder">
+    <div class="section-label">PG rotation order — drag to reorder</div>
+    <div id="pg-order-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div style="font-size:12px;color:#888;margin-top:8px">Players run consecutive slots in this order</div>
+  </div>
+
+  <!-- DATE MODAL -->
+  <div class="modal-backdrop" id="date-modal">
+    <div class="modal-box">
+      <div class="modal-title">Add game to season ledger</div>
+      <div class="modal-label">Game date</div>
+      <input class="modal-date" type="date" id="game-date-input">
+      <div class="modal-btns">
+        <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
+        <button class="modal-btn confirm" id="modal-confirm">Add to ledger</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .app -->
+
+<script>
+// ─── Data ──────────────────────────────────────────────────────────────────
+const ALL=['Jordan','Timothy','Henry','Walker','Nathan','Cora','Judah','Evelyn','Evalyn','Tommy'];
+const SLOTS=8, SLOT_MINS=4, SLOTS_PER_Q=2;
+const POS_NAMES=['PG','2','3','4','5'];
+
+let absent=new Set(['Nathan']);
+let allowedPos={
+  Jordan:[1,2,3],Timothy:[2,3],Henry:[3,4,5],Walker:[1,2,3],Nathan:[2,3,4],
+  Cora:[1,2,3],Judah:[1,2,3],Evelyn:[3,4,5],Evalyn:[3,4,5],Tommy:[4,5]
+};
+let pgOrder=['Jordan','Cora','Walker','Judah'];
+let schedule=[];
+let currentSlot=0;
+let seasonGames=[];
+let viewingGame='totals';
+
+function present(){return ALL.filter(p=>!absent.has(p));}
+function qLabel(s){return s<2?'Quarter 1':s<4?'Quarter 2':s<6?'Quarter 3':'Quarter 4';}
+function isQStart(s){return s>0&&s%SLOTS_PER_Q===0;}
+function canPlay(p,pos){return allowedPos[p]&&allowedPos[p].includes(pos);}
+
+// ─── Persist ───────────────────────────────────────────────────────────────
+function persist(){
+  try{localStorage.setItem('jackals_v1',JSON.stringify({absent:[...absent],allowedPos,pgOrder,schedule,currentSlot,seasonGames}));}catch(e){}
+}
+function restore(){
+  try{
+    const d=JSON.parse(localStorage.getItem('jackals_v1')||'null');
+    if(!d)return;
+    absent=new Set(d.absent||[]);
+    if(d.allowedPos)allowedPos=d.allowedPos;
+    if(d.pgOrder)pgOrder=d.pgOrder;
+    if(d.schedule)schedule=d.schedule;
+    if(d.currentSlot!=null)currentSlot=d.currentSlot;
+    if(d.seasonGames)seasonGames=d.seasonGames;
+  }catch(e){}
+}
+
+// ─── Tab switching ─────────────────────────────────────────────────────────
+function switchTab(id){
+  document.querySelectorAll('#tab-row .tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===id));
+  document.getElementById('btn-ledger').classList.toggle('active',id==='season');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  if(id==='positions')renderPosEditor();
+  if(id==='pgorder')renderPgOrder();
+  if(id==='list')renderList();
+  if(id==='season')renderSeason();
+}
+
+// ─── Attendance ────────────────────────────────────────────────────────────
+function renderAttend(){
+  const g=document.getElementById('attend-grid');
+  g.innerHTML='';
+  ALL.forEach(p=>{
+    const c=document.createElement('div');
+    c.className='pchip '+(absent.has(p)?'absent':'present');
+    c.textContent=p;
+    c.dataset.player=p;
+    c.dataset.action='toggle-absent';
+    g.appendChild(c);
+  });
+}
+
+// ─── Positions ─────────────────────────────────────────────────────────────
+function renderPosEditor(){
+  const el=document.getElementById('pos-editor');
+  el.innerHTML='';
+  ALL.forEach(p=>{
+    const row=document.createElement('div');
+    row.className='player-row';
+    const nm=document.createElement('div');
+    nm.className='pname';nm.textContent=p;
+    const togs=document.createElement('div');
+    togs.className='pos-toggles';
+    ['1','2','3','4','5'].forEach(pos=>{
+      const btn=document.createElement('div');
+      btn.className='ptog '+(allowedPos[p]&&allowedPos[p].includes(+pos)?'on':'');
+      btn.textContent=pos==='1'?'PG':pos;
+      btn.dataset.action='toggle-pos';
+      btn.dataset.player=p;
+      btn.dataset.pos=pos;
+      togs.appendChild(btn);
+    });
+    row.appendChild(nm);row.appendChild(togs);el.appendChild(row);
+  });
+}
+
+// ─── PG Order ──────────────────────────────────────────────────────────────
+function renderPgOrder(){
+  const el=document.getElementById('pg-order-list');
+  el.innerHTML='';
+  const eligible=present().filter(p=>allowedPos[p]&&allowedPos[p].includes(1));
+  pgOrder=pgOrder.filter(p=>eligible.includes(p));
+  eligible.filter(p=>!pgOrder.includes(p)).forEach(p=>pgOrder.push(p));
+  pgOrder.forEach((p,i)=>{
+    const c=document.createElement('div');
+    c.className='pg-chip';
+    c.innerHTML='<span style="font-size:10px;margin-right:4px;opacity:.7">'+(i+1)+'.</span>'+p;
+    c.draggable=true;
+    c.dataset.pgidx=i;
+    el.appendChild(c);
+  });
+}
+
+// ─── Generate schedule ─────────────────────────────────────────────────────
+function buildPgQueue(pgs){
+  const n=pgs.length,q=[],base=Math.floor(SLOTS/n),extra=SLOTS%n;
+  pgs.forEach((pg,i)=>{const cnt=i<extra?base+1:base;for(let j=0;j<cnt;j++)q.push(pg);});
+  return q;
+}
+
+function generateSchedule(){
+  const pp=present();
+  document.getElementById('warn-box').innerHTML='';
+  if(pp.length<5){document.getElementById('warn-box').innerHTML='<div class="warn">Need at least 5 present players.</div>';return;}
+  const pgE=pgOrder.filter(p=>pp.includes(p));
+  if(!pgE.length){document.getElementById('warn-box').innerHTML='<div class="warn">No PG-eligible players present.</div>';return;}
+  const pgQ=buildPgQueue(pgE);
+  const slots_played={};pp.forEach(p=>slots_played[p]=0);
+  const lastPos={};
+  schedule=[];
+  for(let s=0;s<SLOTS;s++){
+    const qStart=isQStart(s);
+    const pg=pgQ[s];
+    const prev=s>0?[schedule[s-1].p1,schedule[s-1].p2,schedule[s-1].p3,schedule[s-1].p4,schedule[s-1].p5]:[];
+    let picks=[pg];
+    slots_played[pg]=(slots_played[pg]||0)+1;lastPos[pg]=1;
+    for(let pos=2;pos<=5;pos++){
+      const elig=pp.filter(p=>!picks.includes(p)&&canPlay(p,pos));
+      elig.sort((a,b)=>{
+        const d=slots_played[a]-slots_played[b];
+        if(Math.abs(d)>0.5)return d;
+        const ac=(!qStart&&lastPos[a]===pos&&prev.includes(a))?-1:0;
+        const bc=(!qStart&&lastPos[b]===pos&&prev.includes(b))?-1:0;
+        return ac-bc;
+      });
+      if(elig.length){picks.push(elig[0]);slots_played[elig[0]]++;lastPos[elig[0]]=pos;}
+      else{
+        const fb=pp.filter(p=>!picks.includes(p)).sort((a,b)=>slots_played[a]-slots_played[b]);
+        if(fb.length){picks.push(fb[0]);slots_played[fb[0]]++;lastPos[fb[0]]=pos;}
+      }
+    }
+    while(picks.length<5){const e=pp.find(p=>!picks.includes(p));if(e){picks.push(e);slots_played[e]++;}else break;}
+    const st=s*SLOT_MINS;
+    schedule.push({label:st+'–'+(st+SLOT_MINS),quarter:qLabel(s),qStart:isQStart(s),
+      p1:picks[0]||'—',p2:picks[1]||'—',p3:picks[2]||'—',p4:picks[3]||'—',p5:picks[4]||'—',
+      bench:pp.filter(p=>!picks.slice(0,5).includes(p))});
+  }
+  currentSlot=0;renderCourt();renderList();persist();
+}
+
+// ─── Court view ────────────────────────────────────────────────────────────
+function renderCourt(){
+  const prev=document.getElementById('prev-btn');
+  const next=document.getElementById('next-btn');
+  const banner=document.getElementById('qbreak-banner');
+  if(!schedule.length){
+    document.getElementById('slot-quarter').textContent='No schedule yet';
+    document.getElementById('slot-time').textContent='—';
+    prev.disabled=true;next.disabled=true;banner.innerHTML='';
+    document.getElementById('bench-kids').innerHTML='<div class="bk-wait" style="padding:6px 0">Generate a schedule first</div>';
+    document.getElementById('mins-row').innerHTML='';
+    ['p1n','p2n','p3n','p4n','p5n'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='—';});
+    return;
+  }
+  prev.disabled=currentSlot===0;next.disabled=currentSlot===schedule.length-1;
+  const r=schedule[currentSlot];
+  document.getElementById('slot-quarter').textContent=r.quarter;
+  document.getElementById('slot-time').textContent=r.label+' min';
+  if(r.qStart){
+    const h=r.quarter==='Quarter 3';
+    banner.innerHTML='<div class="qbreak-banner">&#9201; '+(h?'Halftime — positions reset':'Quarter break — positions reset')+'</div>';
+  }else banner.innerHTML='';
+  const oc=[r.p1,r.p2,r.p3,r.p4,r.p5];
+  ['p1','p2','p3','p4','p5'].forEach((id,i)=>document.getElementById(id+'n').textContent=oc[i]||'—');
+  const nr=currentSlot<schedule.length-1?schedule[currentSlot+1]:null;
+  const no=nr?[nr.p1,nr.p2,nr.p3,nr.p4,nr.p5]:[];
+  const bk=document.getElementById('bench-kids');bk.innerHTML='';
+  if(!r.bench.length){
+    const d=document.createElement('div');d.className='bk-wait';d.style.padding='6px 0';d.textContent='Everyone is on court';bk.appendChild(d);
+  }else{
+    r.bench.forEach(p=>{
+      const si=no.indexOf(p);
+      const div=document.createElement('div');div.className='bench-kid';
+      div.innerHTML='<span class="bk-name">'+p+'</span>'+(si>=0
+        ?'<span class="bk-subinfo">&#8594; In for <strong>'+oc[si]+'</strong> &middot; pos '+POS_NAMES[si]+'</span>'
+        :'<span class="bk-wait">Staying bench</span>');
+      bk.appendChild(div);
+    });
+  }
+  const mins={};present().forEach(p=>mins[p]=0);
+  schedule.forEach(s=>[s.p1,s.p2,s.p3,s.p4,s.p5].forEach(p=>{if(mins[p]!=null)mins[p]+=SLOT_MINS;}));
+  const mr=document.getElementById('mins-row');mr.innerHTML='';
+  present().sort((a,b)=>mins[b]-mins[a]).forEach(p=>{
+    const c=document.createElement('div');c.className='mchip'+(mins[p]<16?' low':'');c.textContent=p+': '+mins[p]+'m';mr.appendChild(c);
+  });
+}
+
+// ─── List view ─────────────────────────────────────────────────────────────
+function renderList(){
+  const el=document.getElementById('list-content');
+  if(!schedule.length){el.innerHTML='<div style="color:#999;font-size:13px;padding:.5rem 0">Generate a schedule first.</div>';return;}
+  const mins={};present().forEach(p=>mins[p]=0);
+  schedule.forEach(s=>[s.p1,s.p2,s.p3,s.p4,s.p5].forEach(p=>{if(mins[p]!=null)mins[p]+=SLOT_MINS;}));
+  let h='<table class="list-table"><thead><tr><th>Time</th><th>PG</th><th>2</th><th>3</th><th>4</th><th>5</th><th>Bench</th></tr></thead><tbody>';
+  let lq='';
+  schedule.forEach((r,i)=>{
+    if(r.quarter!==lq){if(lq!=='')h+='<tr class="q-break-label"><td colspan="7">&#9201; '+(r.quarter==='Quarter 3'?'Halftime / '+r.quarter:r.quarter)+'</td></tr>';lq=r.quarter;}
+    h+='<tr style="'+(i===currentSlot?'background:#f0f8ff;':'')+'">'
+      +'<td class="lt-time">'+r.label+'</td>'
+      +'<td class="lt-pg">'+r.p1+'</td>'
+      +'<td class="lt-player">'+r.p2+'</td>'
+      +'<td class="lt-player">'+r.p3+'</td>'
+      +'<td class="lt-player">'+r.p4+'</td>'
+      +'<td class="lt-player">'+r.p5+'</td>'
+      +'<td class="lt-bench">'+(r.bench.join(', ')||'—')+'</td></tr>';
+  });
+  h+='</tbody></table><div class="list-mins" style="margin-top:1rem;background:#fff;border-radius:12px;border:.5px solid #ddd;padding:.75rem 1rem">'
+    +'<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem">Minutes this game</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:5px">';
+  present().sort((a,b)=>mins[b]-mins[a]).forEach(p=>{
+    h+='<div class="'+(mins[p]<16?'mchip low':'mchip')+'">'+p+': '+mins[p]+'m</div>';
+  });
+  h+='</div></div>';
+  el.innerHTML=h;
+}
+
+// ─── Season ────────────────────────────────────────────────────────────────
+function calcGameStats(sched,absentArr){
+  const as=new Set(absentArr),st={};
+  ALL.forEach(p=>{st[p]={pg:0,p2:0,p3:0,p4:0,p5:0,total:0,absent:as.has(p)};});
+  sched.forEach(slot=>{
+    [slot.p1,slot.p2,slot.p3,slot.p4,slot.p5].forEach((p,i)=>{
+      if(st[p]){const k=['pg','p2','p3','p4','p5'][i];st[p][k]+=SLOT_MINS;st[p].total+=SLOT_MINS;}
+    });
+  });
+  return st;
+}
+
+function renderSeason(){
+  const el=document.getElementById('season-content');
+  if(!seasonGames.length){el.innerHTML='<div class="no-season">No games yet. Generate a schedule then tap <strong>+ Season</strong>.</div>';return;}
+  let tabs='<div class="season-game-tabs">';
+  seasonGames.forEach((g,i)=>{
+    tabs+='<div class="sgame-tab'+(viewingGame===i?' active':'')+'" data-action="view-season" data-idx="'+i+'">'+g.label+'<br><span style="font-size:10px;font-weight:400;opacity:.7">'+g.date+'</span></div>';
+  });
+  tabs+='<div class="sgame-tab totals'+(viewingGame==='totals'?' active':'')+'" data-action="view-season" data-idx="totals">Season totals</div></div>';
+
+  let gs,gLabel,showDel=false,gIdx=-1;
+  if(viewingGame==='totals'){
+    gLabel='Season totals — all games';
+    gs={};ALL.forEach(p=>{gs[p]={pg:0,p2:0,p3:0,p4:0,p5:0,total:0,gamesPlayed:0,gamesAbsent:0};});
+    seasonGames.forEach(g=>{ALL.forEach(p=>{const s=g.stats[p]||{};gs[p].pg+=(s.pg||0);gs[p].p2+=(s.p2||0);gs[p].p3+=(s.p3||0);gs[p].p4+=(s.p4||0);gs[p].p5+=(s.p5||0);gs[p].total+=(s.total||0);if(s.absent)gs[p].gamesAbsent++;else gs[p].gamesPlayed++;});});
+  }else{
+    gIdx=viewingGame;const g=seasonGames[gIdx];gLabel=g.label+' — '+g.date;gs=g.stats;showDel=true;
+  }
+  const sorted=[...ALL].sort((a,b)=>(gs[b]?.total||0)-(gs[a]?.total||0));
+  const cell=v=>v>0?'<td class="pos-cell">'+v+'m</td>':'<td style="color:#ddd">—</td>';
+
+  let tbl='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:6px">'
+    +'<span style="font-size:13px;font-weight:600;color:#1a1a1a">'+gLabel+'</span>';
+  if(showDel){
+    tbl+='<div style="display:flex;align-items:center;gap:6px">'
+      +'<button class="del-game-btn" data-action="del-confirm" data-idx="'+gIdx+'">&#128465; Remove game</button>'
+      +'<div class="del-confirm" id="del-confirm-'+gIdx+'">'
+      +'<span style="font-size:12px;color:#791F1F">Sure?</span>'
+      +'<button class="del-yes" data-action="del-game" data-idx="'+gIdx+'">Yes</button>'
+      +'<button class="del-no" data-action="del-cancel" data-idx="'+gIdx+'">No</button>'
+      +'</div></div>';
+  }
+  tbl+='</div><div class="season-table-wrap"><table class="season-table"><thead><tr>'
+    +'<th class="left">Player</th><th>PG</th><th>Pos 2</th><th>Pos 3</th><th>Pos 4</th><th>Pos 5</th>'
+    +'<th>'+(viewingGame==='totals'?'Season total':'Game total')+'</th>'
+    +(viewingGame==='totals'?'<th>Games</th>':'')
+    +'</tr></thead><tbody>';
+  sorted.forEach(p=>{
+    const s=gs[p]||{};
+    if(viewingGame!=='totals'&&s.absent){tbl+='<tr><td class="pname-cell">'+p+'</td><td colspan="6" class="absent-cell">Absent</td></tr>';return;}
+    tbl+='<tr><td class="pname-cell">'+p+'</td>'
+      +cell(s.pg||0)+cell(s.p2||0)+cell(s.p3||0)+cell(s.p4||0)+cell(s.p5||0)
+      +'<td class="'+(viewingGame==='totals'?'season-total':'total-cell')+'">'+(s.total||0)+'m</td>'
+      +(viewingGame==='totals'?'<td style="font-size:11px;color:#666">'+(s.gamesPlayed||0)+'/'+seasonGames.length+'</td>':'')
+      +'</tr>';
+  });
+  tbl+='</tbody></table></div>';
+  el.innerHTML=tabs+tbl;
+}
+
+// ─── Date modal ────────────────────────────────────────────────────────────
+function openDateModal(){
+  if(!schedule.length){showMsg('Generate a schedule first.','warn');return;}
+  const t=new Date(),pad=n=>String(n).padStart(2,'0');
+  document.getElementById('game-date-input').value=t.getFullYear()+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate());
+  document.getElementById('date-modal').classList.add('open');
+}
+function closeDateModal(){document.getElementById('date-modal').classList.remove('open');}
+function confirmCommit(){
+  const raw=document.getElementById('game-date-input').value;
+  if(!raw){showMsg('Please pick a date.','warn');return;}
+  const [y,m,d]=raw.split('-');
+  const dl=new Date(+y,+m-1,+d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  closeDateModal();
+  const label='Game '+(seasonGames.length+1);
+  seasonGames.push({label,date:dl,stats:calcGameStats(schedule,[...absent]),absentList:[...absent]});
+  showMsg(label+' ('+dl+') added!','success-msg');
+  persist();
+  if(document.getElementById('panel-season').classList.contains('active'))renderSeason();
+}
+
+function showMsg(msg,cls){
+  const el=document.getElementById('save-msg');
+  el.innerHTML='<div class="'+cls+'" style="margin-bottom:.5rem">'+msg+'</div>';
+  setTimeout(()=>{if(el)el.innerHTML='';},4000);
+}
+
+// ─── Lock ──────────────────────────────────────────────────────────────────
+function toggleLock(){
+  const locked=document.body.classList.toggle('locked');
+  document.getElementById('lock-btn').textContent=locked?'🔒':'🔓';
+  document.getElementById('lock-btn').classList.toggle('locked',locked);
+}
+
+// ─── Event delegation (iOS-safe) ───────────────────────────────────────────
+document.addEventListener('click',function(e){
+  const t=e.target;const el=t.closest('[data-action]');if(!el)return;
+  const action=el.dataset.action;
+
+  if(action==='toggle-absent'){
+    const p=el.dataset.player;
+    absent.has(p)?absent.delete(p):absent.add(p);
+    renderAttend();schedule=[];renderCourt();persist();
+  }
+  else if(action==='toggle-pos'){
+    const p=el.dataset.player,n=+el.dataset.pos;
+    if(!allowedPos[p])allowedPos[p]=[];
+    const idx=allowedPos[p].indexOf(n);
+    idx>=0?allowedPos[p].splice(idx,1):allowedPos[p].push(n);
+    allowedPos[p].sort((a,b)=>a-b);
+    el.classList.toggle('on');
+    if(!allowedPos[p].includes(1))pgOrder=pgOrder.filter(x=>x!==p);
+    schedule=[];persist();
+    if(document.getElementById('panel-pgorder').classList.contains('active'))renderPgOrder();
+  }
+  else if(action==='view-season'){
+    const idx=el.dataset.idx;
+    viewingGame=idx==='totals'?'totals':+idx;
+    renderSeason();
+  }
+  else if(action==='del-confirm'){
+    const conf=document.getElementById('del-confirm-'+el.dataset.idx);
+    if(conf)conf.classList.add('show');
+  }
+  else if(action==='del-cancel'){
+    const conf=document.getElementById('del-confirm-'+el.dataset.idx);
+    if(conf)conf.classList.remove('show');
+  }
+  else if(action==='del-game'){
+    const idx=+el.dataset.idx;
+    seasonGames.splice(idx,1);
+    seasonGames.forEach((g,i)=>g.label='Game '+(i+1));
+    viewingGame='totals';persist();renderSeason();
+  }
+});
+
+// PG drag reorder
+let dragSrc=null;
+document.addEventListener('dragstart',function(e){
+  const el=e.target.closest('[data-pgidx]');
+  if(el)dragSrc=+el.dataset.pgidx;
+});
+document.addEventListener('dragover',function(e){e.preventDefault();});
+document.addEventListener('drop',function(e){
+  e.preventDefault();
+  const el=e.target.closest('[data-pgidx]');
+  if(el&&dragSrc!=null){
+    const to=+el.dataset.pgidx;
+    const tmp=pgOrder[dragSrc];pgOrder[dragSrc]=pgOrder[to];pgOrder[to]=tmp;
+    dragSrc=null;renderPgOrder();schedule=[];persist();
+  }
+});
+
+// Top buttons
+document.getElementById('btn-reopt').addEventListener('click',generateSchedule);
+document.getElementById('btn-season-add').addEventListener('click',openDateModal);
+document.getElementById('btn-ledger').addEventListener('click',()=>switchTab('season'));
+document.getElementById('lock-btn').addEventListener('click',toggleLock);
+document.getElementById('prev-btn').addEventListener('click',()=>{currentSlot=Math.max(0,currentSlot-1);renderCourt();persist();});
+document.getElementById('next-btn').addEventListener('click',()=>{currentSlot=Math.min(schedule.length-1,currentSlot+1);renderCourt();persist();});
+document.getElementById('modal-cancel').addEventListener('click',closeDateModal);
+document.getElementById('modal-confirm').addEventListener('click',confirmCommit);
+
+// Tabs
+document.querySelectorAll('#tab-row .tab').forEach(tab=>{
+  tab.addEventListener('click',()=>switchTab(tab.dataset.tab));
+});
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+restore();
+renderAttend();
+renderCourt();
+renderList();
+</script>
+</body>
+</html>
