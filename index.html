@@ -72,7 +72,8 @@ button{-webkit-appearance:none;appearance:none;font-family:inherit}
 .ptog{padding:5px 10px;border-radius:999px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #ccc;background:#fff;color:#777;user-select:none}
 .ptog.on{background:#dbeeff;border-color:#378ADD;color:#0C447C}
 /* pg order */
-.pg-chip{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #1D9E75;background:#d4f0e4;color:#085041;user-select:none;margin-bottom:4px}
+.pg-chip{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #1D9E75;background:#d4f0e4;color:#085041;user-select:none;margin-bottom:4px;display:inline-flex;align-items:center}
+.pg-chip-selected{border-color:#378ADD;background:#dbeeff;color:#0C447C;box-shadow:0 0 0 2px #378ADD40}
 /* season */
 .season-game-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1rem}
 .sgame-tab{padding:6px 10px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #ccc;background:#fff;color:#555;white-space:nowrap;line-height:1.4;text-align:center}
@@ -96,6 +97,14 @@ button{-webkit-appearance:none;appearance:none;font-family:inherit}
 .del-yes{padding:3px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid #E24B4A;background:#E24B4A;color:#fff;font-weight:600}
 .del-no{padding:3px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid #ccc;background:#fff;color:#555}
 .no-season{color:#999;font-size:13px;padding:.5rem 0}
+/* snapshots */
+.snapshot-card{background:#fff;border-radius:10px;border:.5px solid #ddd;padding:.75rem 1rem;display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.snapshot-info{flex:1;min-width:0}
+.snapshot-label{font-size:14px;font-weight:600;color:#1a1a1a}
+.snapshot-meta{font-size:11px;color:#888;margin-top:2px}
+.snapshot-load-btn{padding:6px 12px;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #1D9E75;background:#d4f0e4;color:#085041;white-space:nowrap}
+.snapshot-del-btn{padding:6px 10px;border-radius:7px;font-size:12px;cursor:pointer;border:1.5px solid #ddd;background:#f5f5f5;color:#999}
+.snap-save-btn{width:100%;padding:10px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #7F77DD;background:#f5f0ff;color:#3C3489;margin-bottom:1rem}
 /* modal */
 .modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
 .modal-backdrop.open{display:flex}
@@ -175,7 +184,7 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
     <div class="game-card">
       <div class="court-section">
         <div class="card-section-title">On court</div>
-        <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">
+        <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">
           <rect x="6" y="6" width="308" height="208" rx="3" fill="none" stroke="#ccc" stroke-width="1"/>
           <rect x="110" y="6" width="100" height="105" fill="none" stroke="#ccc" stroke-width="1"/>
           <path d="M110 120 A50 50 0 0 0 210 120" fill="none" stroke="#ccc" stroke-width="1"/>
@@ -189,7 +198,7 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
           <g><circle cx="270" cy="60" r="28" fill="#dbeeff" stroke="#378ADD" stroke-width="1.5"/><text class="on-pos" x="270" y="53" text-anchor="middle" dominant-baseline="middle">5</text><text id="p5n" class="on-name" x="270" y="66" text-anchor="middle" dominant-baseline="middle">—</text></g>
           <g><circle cx="50" cy="165" r="28" fill="#dbeeff" stroke="#378ADD" stroke-width="1.5"/><text class="on-pos" x="50" y="158" text-anchor="middle" dominant-baseline="middle">2</text><text id="p2n" class="on-name" x="50" y="171" text-anchor="middle" dominant-baseline="middle">—</text></g>
           <g><circle cx="270" cy="165" r="28" fill="#dbeeff" stroke="#378ADD" stroke-width="1.5"/><text class="on-pos" x="270" y="158" text-anchor="middle" dominant-baseline="middle">3</text><text id="p3n" class="on-name" x="270" y="171" text-anchor="middle" dominant-baseline="middle">—</text></g>
-          <g><circle cx="160" cy="198" r="28" fill="#d4f0e4" stroke="#1D9E75" stroke-width="1.5"/><text class="on-pos" x="160" y="191" text-anchor="middle" dominant-baseline="middle" fill="#0F6E56">PG</text><text id="p1n" class="on-name" x="160" y="204" text-anchor="middle" dominant-baseline="middle" fill="#085041">—</text></g>
+          <g><circle cx="160" cy="210" r="28" fill="#d4f0e4" stroke="#1D9E75" stroke-width="1.5"/><text class="on-pos" x="160" y="203" text-anchor="middle" dominant-baseline="middle" fill="#0F6E56">PG</text><text id="p1n" class="on-name" x="160" y="216" text-anchor="middle" dominant-baseline="middle" fill="#085041">—</text></g>
         </svg>
       </div>
       <div class="bench-section">
@@ -298,6 +307,7 @@ let schedule=[];
 let currentSlot=0;
 let seasonGames=[];
 let viewingGame='totals';
+let snapshots=[]; // [{label, date, absent, schedule, currentSlot, pgOrder, allowedPos, playerPriority, slotMins, leagueId}]
 
 function present(){return ALL.filter(p=>!absent.has(p));}
 function canPlay(p,pos){return allowedPos[p]&&allowedPos[p].includes(pos);}
@@ -305,7 +315,7 @@ function getPriority(p){return playerPriority[p]||'normal';}
 
 // ─── Persist ───────────────────────────────────────────────────────────────
 function persist(){
-  try{localStorage.setItem('jackals_v1',JSON.stringify({absent:[...absent],allowedPos,playerPriority,pgOrder,schedule,currentSlot,seasonGames,leagueId,slotMins}));}catch(e){}
+  try{localStorage.setItem('jackals_v1',JSON.stringify({absent:[...absent],allowedPos,playerPriority,pgOrder,schedule,currentSlot,seasonGames,leagueId,slotMins,snapshots}));}catch(e){}
 }
 function restore(){
   try{
@@ -320,6 +330,7 @@ function restore(){
     if(d.seasonGames)seasonGames=d.seasonGames;
     if(d.leagueId)leagueId=d.leagueId;
     if(d.slotMins)slotMins=d.slotMins;
+    if(d.snapshots)snapshots=d.snapshots;
   }catch(e){}
 }
 
@@ -395,20 +406,68 @@ function renderPosEditor(){
 }
 
 // ─── PG Order ──────────────────────────────────────────────────────────────
+let pgSelected=null; // index of currently selected PG chip
+
 function renderPgOrder(){
   const el=document.getElementById('pg-order-list');
   el.innerHTML='';
   const eligible=present().filter(p=>allowedPos[p]&&allowedPos[p].includes(1));
   pgOrder=pgOrder.filter(p=>eligible.includes(p));
   eligible.filter(p=>!pgOrder.includes(p)).forEach(p=>pgOrder.push(p));
+
+  if(pgOrder.length===0){
+    el.innerHTML='<div style="color:#999;font-size:13px">No PG-eligible players present.</div>';
+    return;
+  }
+
+  // Instruction text
+  const hint=document.createElement('div');
+  hint.style.cssText='font-size:12px;color:#888;margin-bottom:8px';
+  hint.textContent=pgSelected!=null?'Now tap another player to swap positions.':'Tap a player to select, then tap another to swap order.';
+  el.appendChild(hint);
+
   pgOrder.forEach((p,i)=>{
     const c=document.createElement('div');
-    c.className='pg-chip';
-    c.innerHTML='<span style="font-size:10px;margin-right:4px;opacity:.7">'+(i+1)+'.</span>'+p;
-    c.draggable=true;
+    const isSelected=pgSelected===i;
+    c.className='pg-chip'+(isSelected?' pg-chip-selected':'');
+    c.innerHTML='<span style="font-size:10px;margin-right:6px;opacity:.7">'+(i+1)+'.</span>'
+      +p
+      +(isSelected?' <span style="font-size:11px;margin-left:4px">✓</span>':'')
+      +'<span style="font-size:13px;margin-left:8px;opacity:.4">⇅</span>';
+    c.dataset.action='pg-reorder';
     c.dataset.pgidx=i;
     el.appendChild(c);
   });
+
+  // Up/down arrow buttons as alternative
+  const arrowNote=document.createElement('div');
+  arrowNote.style.cssText='font-size:11px;color:#aaa;margin-top:10px';
+  arrowNote.textContent='Or use arrows:';
+  el.appendChild(arrowNote);
+
+  const arrowGrid=document.createElement('div');
+  arrowGrid.style.cssText='display:flex;flex-direction:column;gap:4px;margin-top:6px';
+  pgOrder.forEach((p,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px';
+    row.innerHTML='<span style="font-size:13px;font-weight:500;min-width:80px;color:#1a1a1a">'+(i+1)+'. '+p+'</span>';
+    if(i>0){
+      const up=document.createElement('button');
+      up.textContent='▲';
+      up.style.cssText='padding:4px 10px;border-radius:6px;border:1px solid #ccc;background:#fff;font-size:12px;cursor:pointer';
+      up.dataset.action='pg-move';up.dataset.pgidx=i;up.dataset.dir='up';
+      row.appendChild(up);
+    }
+    if(i<pgOrder.length-1){
+      const dn=document.createElement('button');
+      dn.textContent='▼';
+      dn.style.cssText='padding:4px 10px;border-radius:6px;border:1px solid #ccc;background:#fff;font-size:12px;cursor:pointer';
+      dn.dataset.action='pg-move';dn.dataset.pgidx=i;dn.dataset.dir='down';
+      row.appendChild(dn);
+    }
+    arrowGrid.appendChild(row);
+  });
+  el.appendChild(arrowGrid);
 }
 
 // ─── Generate schedule ─────────────────────────────────────────────────────
@@ -569,21 +628,84 @@ function renderList(){
   el.innerHTML=h;
 }
 
-// ─── Season ────────────────────────────────────────────────────────────────
-function calcGameStats(sched,absentArr){
-  const as=new Set(absentArr),st={};
-  ALL.forEach(p=>{st[p]={pg:0,p2:0,p3:0,p4:0,p5:0,total:0,absent:as.has(p)};});
-  sched.forEach(slot=>{
-    [slot.p1,slot.p2,slot.p3,slot.p4,slot.p5].forEach((p,i)=>{
-      if(st[p]){const k=['pg','p2','p3','p4','p5'][i];st[p][k]+=slotMins;st[p].total+=slotMins;}
-    });
+// ─── Snapshots ─────────────────────────────────────────────────────────────
+function saveSnapshot(){
+  if(!schedule.length){showMsg('Generate a schedule first before saving a snapshot.','warn');return;}
+  const now=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  const label='Snapshot '+(snapshots.length+1);
+  const timestamp=now.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+pad(now.getHours())+':'+pad(now.getMinutes());
+  const pp=present();
+  snapshots.push({
+    label, timestamp,
+    absent:[...absent], schedule, currentSlot,
+    pgOrder:[...pgOrder],
+    allowedPos:JSON.parse(JSON.stringify(allowedPos)),
+    playerPriority:JSON.parse(JSON.stringify(playerPriority)),
+    slotMins, leagueId,
+    summary: pp.join(', ')+' · slot '+(currentSlot+1)+'/'+schedule.length
   });
-  return st;
+  persist();
+  renderSeason();
+  showMsg('Snapshot saved — find it in the Ledger tab.','success-msg');
+}
+
+function loadSnapshot(idx){
+  const s=snapshots[idx];
+  if(!s)return;
+  absent=new Set(s.absent||[]);
+  schedule=s.schedule||[];
+  currentSlot=s.currentSlot||0;
+  pgOrder=s.pgOrder||pgOrder;
+  allowedPos=s.allowedPos||allowedPos;
+  playerPriority=s.playerPriority||{};
+  slotMins=s.slotMins||slotMins;
+  leagueId=s.leagueId||leagueId;
+  persist();
+  renderAttend();renderCourt();renderList();renderSettings();
+  switchTab('court');
+  showMsg('Snapshot loaded — you\'re back to '+s.label+'.','success-msg');
+}
+
+function deleteSnapshot(idx){
+  snapshots.splice(idx,1);
+  snapshots.forEach((s,i)=>s.label='Snapshot '+(i+1));
+  persist();renderSeason();
 }
 
 function renderSeason(){
   const el=document.getElementById('season-content');
-  if(!seasonGames.length){el.innerHTML='<div class="no-season">No games yet. Generate a schedule then tap <strong>+ Season</strong>.</div>';return;}
+
+  // ── Snapshots section ──
+  let html='<div style="margin-bottom:1.25rem">'
+    +'<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">&#128190; Game snapshots</div>'
+    +'<button class="snap-save-btn" data-action="save-snapshot">&#128190; Save current roster &amp; schedule as snapshot</button>';
+
+  if(snapshots.length===0){
+    html+='<div style="color:#bbb;font-size:13px;font-style:italic">No snapshots yet. Save one before changing settings so you can restore if needed.</div>';
+  } else {
+    snapshots.slice().reverse().forEach((s,ri)=>{
+      const idx=snapshots.length-1-ri;
+      html+='<div class="snapshot-card">'
+        +'<div class="snapshot-info">'
+        +'<div class="snapshot-label">'+s.label+'</div>'
+        +'<div class="snapshot-meta">'+s.timestamp+' · '+s.summary+'</div>'
+        +'</div>'
+        +'<button class="snapshot-load-btn" data-action="load-snapshot" data-idx="'+idx+'">&#8635; Restore</button>'
+        +'<button class="snapshot-del-btn" data-action="del-snapshot" data-idx="'+idx+'">✕</button>'
+        +'</div>';
+    });
+  }
+  html+='</div><hr style="border:none;border-top:.5px solid #e0e0e0;margin-bottom:1rem">';
+
+  // ── Season games section ──
+  html+='<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">&#128200; Season ledger</div>';
+
+  if(!seasonGames.length){
+    html+='<div class="no-season">No games recorded yet. Generate a schedule then tap <strong>+ Season</strong>.</div>';
+    el.innerHTML=html;return;
+  }
+
   let tabs='<div class="season-game-tabs">';
   seasonGames.forEach((g,i)=>{
     tabs+='<div class="sgame-tab'+(viewingGame===i?' active':'')+'" data-action="view-season" data-idx="'+i+'">'+g.label+'<br><span style="font-size:10px;font-weight:400;opacity:.7">'+g.date+'</span></div>';
@@ -627,7 +749,19 @@ function renderSeason(){
       +'</tr>';
   });
   tbl+='</tbody></table></div>';
-  el.innerHTML=tabs+tbl;
+  el.innerHTML=html+tabs+tbl;
+}
+
+// ─── Season stats helper ────────────────────────────────────────────────────
+function calcGameStats(sched,absentArr){
+  const as=new Set(absentArr),st={};
+  ALL.forEach(p=>{st[p]={pg:0,p2:0,p3:0,p4:0,p5:0,total:0,absent:as.has(p)};});
+  sched.forEach(slot=>{
+    [slot.p1,slot.p2,slot.p3,slot.p4,slot.p5].forEach((p,i)=>{
+      if(st[p]){const k=['pg','p2','p3','p4','p5'][i];st[p][k]+=slotMins;st[p].total+=slotMins;}
+    });
+  });
+  return st;
 }
 
 // ─── Date modal ────────────────────────────────────────────────────────────
@@ -719,6 +853,15 @@ document.addEventListener('click',function(e){
     viewingGame=idx==='totals'?'totals':+idx;
     renderSeason();
   }
+  else if(action==='save-snapshot'){
+    saveSnapshot();
+  }
+  else if(action==='load-snapshot'){
+    loadSnapshot(+el.dataset.idx);
+  }
+  else if(action==='del-snapshot'){
+    deleteSnapshot(+el.dataset.idx);
+  }
   else if(action==='set-priority'){
     const p=el.dataset.player,level=el.dataset.level;
     playerPriority[p]=level;
@@ -734,6 +877,27 @@ document.addEventListener('click',function(e){
     schedule=[];persist();renderSettings();
     showMsg('Sub interval updated — re-optimize to rebuild schedule.','success-msg');
   }
+  else if(action==='pg-reorder'){
+    const i=+el.dataset.pgidx;
+    if(pgSelected===null){
+      pgSelected=i;
+    } else if(pgSelected===i){
+      pgSelected=null; // deselect
+    } else {
+      // swap
+      const tmp=pgOrder[pgSelected];pgOrder[pgSelected]=pgOrder[i];pgOrder[i]=tmp;
+      pgSelected=null;schedule=[];persist();
+    }
+    renderPgOrder();
+  }
+  else if(action==='pg-move'){
+    const i=+el.dataset.pgidx,dir=el.dataset.dir;
+    const to=dir==='up'?i-1:i+1;
+    if(to>=0&&to<pgOrder.length){
+      const tmp=pgOrder[i];pgOrder[i]=pgOrder[to];pgOrder[to]=tmp;
+      schedule=[];persist();renderPgOrder();
+    }
+  }
   else if(action==='del-confirm'){
     const conf=document.getElementById('del-confirm-'+el.dataset.idx);
     if(conf)conf.classList.add('show');
@@ -747,23 +911,6 @@ document.addEventListener('click',function(e){
     seasonGames.splice(idx,1);
     seasonGames.forEach((g,i)=>g.label='Game '+(i+1));
     viewingGame='totals';persist();renderSeason();
-  }
-});
-
-// PG drag reorder
-let dragSrc=null;
-document.addEventListener('dragstart',function(e){
-  const el=e.target.closest('[data-pgidx]');
-  if(el)dragSrc=+el.dataset.pgidx;
-});
-document.addEventListener('dragover',function(e){e.preventDefault();});
-document.addEventListener('drop',function(e){
-  e.preventDefault();
-  const el=e.target.closest('[data-pgidx]');
-  if(el&&dragSrc!=null){
-    const to=+el.dataset.pgidx;
-    const tmp=pgOrder[dragSrc];pgOrder[dragSrc]=pgOrder[to];pgOrder[to]=tmp;
-    dragSrc=null;renderPgOrder();schedule=[];persist();
   }
 });
 
