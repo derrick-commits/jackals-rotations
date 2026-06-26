@@ -58,6 +58,11 @@ button{-webkit-appearance:none;appearance:none;font-family:inherit}
 .lt-player{color:#0C447C}
 .lt-bench{color:#999;font-size:12px;cursor:default!important}
 .lt-selected{background:#fff3cd!important;outline:2px solid #EF9F27}
+.lt-s1{border-left:3px solid #378ADD}
+.lt-s2{border-left:3px solid #7F77DD}
+.period-header{background:#f8f8f8;padding:6px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:.5px solid #efefef}
+.period-label{font-size:11px;font-weight:600;color:#633806;display:flex;align-items:center;gap:6px}
+.swap-string-btn{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid #378ADD;background:#dbeeff;color:#0C447C;white-space:nowrap}
 /* positions */
 .player-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:.5px solid #e0e0e0;flex-wrap:wrap}
 .player-row:last-child{border-bottom:none}
@@ -141,6 +146,15 @@ button{-webkit-appearance:none;appearance:none;font-family:inherit}
 .pri-btn{padding:4px 8px;border-radius:999px;font-size:11px;font-weight:500;cursor:pointer;border:1.5px solid #ddd;background:#fff;color:#888;white-space:nowrap}
 .pri-btn.more{border-color:#1D9E75;background:#d4f0e4;color:#085041}
 .pri-btn.less{border-color:#BA7517;background:#fff8e8;color:#633806}
+/* string position grid */
+.str-grid{width:100%;border-collapse:collapse;margin-top:.5rem}
+.str-grid th{font-size:10px;font-weight:700;text-align:center;padding:4px 2px;text-transform:uppercase;letter-spacing:.05em;color:#888;border-bottom:1.5px solid #e8e8e8}
+.str-grid td{vertical-align:top;padding:3px;width:20%}
+.str-cell{min-height:38px;border-radius:8px;border:1.5px dashed #ddd;display:flex;flex-direction:column;gap:3px;padding:3px;transition:background .12s}
+.str-cell.drop-target{background:#fff3cd!important;border-color:#EF9F27!important;border-style:solid!important}
+.str-player-chip{padding:5px 4px;border-radius:6px;font-size:11px;font-weight:600;text-align:center;cursor:pointer;user-select:none;line-height:1.2;word-break:break-word}
+.str-player-chip.selected{box-shadow:0 0 0 2px #EF9F27;outline:2px solid #EF9F27}
+.str-player-chip.not-allowed{opacity:.5;text-decoration:line-through}
 /* lock */
 body.locked .gen-btn,body.locked .season-add-btn,body.locked .ledger-btn{pointer-events:none;opacity:.35}
 body.locked .tab[data-tab="attend"],body.locked .tab[data-tab="positions"],body.locked .tab[data-tab="pgorder"],body.locked .tab[data-tab="strings"],body.locked .tab[data-tab="settings"]{pointer-events:none;opacity:.35}
@@ -222,7 +236,7 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip,body.locked .splayer-c
 
   <!-- LIST VIEW -->
   <div class="panel" id="panel-list">
-    <div style="font-size:12px;color:#888;margin-bottom:8px">Tap any player cell to swap them with another.</div>
+    <div style="font-size:12px;color:#888;margin-bottom:8px">Tap a name to select (turns yellow), tap another to swap. Or press-and-drag. Use <strong>⇄ Swap strings</strong> to flip which string plays a period.</div>
     <div id="list-content"><div style="color:#999;font-size:13px;padding:.5rem 0">Generate a schedule first.</div></div>
   </div>
 
@@ -352,10 +366,14 @@ let allowedPos={
 let playerPriority={};
 let pgOrder=['Jordan','Cora','Walker','Judah'];
 
-// Strings: 'strings' mode = String 1 plays period 1 & 3, String 2 plays period 2 & 4
-// In a 2-half game: String 1 = Half 1, String 2 = Half 2
+// Strings: array of {id, name, color, players:[]}
+// periodAssignment: array of string ids, one per period (length = lg.periods)
 let stringMode='strings'; // 'strings' | 'open'
-let strings={s1:[],s2:[]}; // player assignments
+let stringList=[
+  {id:'s1',name:'String 1',color:'#378ADD',bg:'#dbeeff',players:[]},
+  {id:'s2',name:'String 2',color:'#7F77DD',bg:'#f0eeff',players:[]},
+];
+let periodAssignment=[]; // e.g. ['s1','s2'] for 2 halves
 
 let schedule=[];
 let currentSlot=0;
@@ -364,7 +382,30 @@ let viewingGame='totals';
 let snapshots=[];
 
 // ── Swap state for list view ──────────────────────────────────────────────
-let swapSel=null; // {slotIdx, posKey} e.g. {slotIdx:0, posKey:'p2'}
+let swapSel=null;
+let stringMoveSel=null;
+let slotStrSel=null; // slotIdx being reassigned to a string
+// String position grid selection: {stridx, player} — player being moved within string
+let strPosSel=null;
+
+// Apply a string's lineup to a specific slot index
+function applyStringToSlot(slotIdx, strId){
+  const str=getStringById(strId);
+  if(!str)return;
+  const pp=present();
+  const lineup=str.players.filter(p=>pp.includes(p));
+  if(lineup.length<5){showMsg(str.name+' needs 5 present players.','warn');return;}
+  const pgE_str=pgOrder.filter(p=>lineup.includes(p)&&allowedPos[p]&&allowedPos[p].includes(1));
+  const spp=getSlotsPerPeriod();
+  const slotInPeriod=slotIdx%spp;
+  const picks=pickFiveFromString(lineup,pgE_str,slotInPeriod,spp,slotIdx,str);
+  const slot=schedule[slotIdx];
+  slot.p1=picks[0]||'—';slot.p2=picks[1]||'—';slot.p3=picks[2]||'—';slot.p4=picks[3]||'—';slot.p5=picks[4]||'—';
+  slot.bench=pp.filter(p=>!picks.includes(p));
+  slot.strId=strId;slot.strName=str.name;slot.strColor=str.color;slot.strBg=str.bg;
+  slotStrSel=null;swapSel=null;
+  renderCourt();renderList();persist();
+}
 
 // ── Hardcoded Game 1 ──────────────────────────────────────────────────────
 const GAME1_SCHEDULE=[
@@ -391,11 +432,10 @@ function initSeasonGames(){
 function present(){return ALL.filter(p=>!absent.has(p));}
 function canPlay(p,pos){return allowedPos[p]&&allowedPos[p].includes(pos);}
 function getPriority(p){return playerPriority[p]||'normal';}
-function getStringOf(p){if(strings.s1.includes(p))return 's1';if(strings.s2.includes(p))return 's2';return null;}
 
 // ─── Persist ───────────────────────────────────────────────────────────────
 function persist(){
-  try{localStorage.setItem('jackals_v1',JSON.stringify({ALL,absent:[...absent],allowedPos,playerPriority,pgOrder,strings,stringMode,schedule,currentSlot,seasonGames,leagueId,slotMins,snapshots}));}catch(e){}
+  try{localStorage.setItem('jackals_v1',JSON.stringify({ALL,absent:[...absent],allowedPos,playerPriority,pgOrder,stringList,periodAssignment,stringMode,schedule,currentSlot,seasonGames,leagueId,slotMins,snapshots}));}catch(e){}
 }
 function restore(){
   try{
@@ -406,7 +446,13 @@ function restore(){
     if(d.allowedPos)allowedPos=d.allowedPos;
     if(d.playerPriority)playerPriority=d.playerPriority;
     if(d.pgOrder)pgOrder=d.pgOrder;
-    if(d.strings)strings=d.strings;
+    if(d.stringList&&d.stringList.length)stringList=d.stringList;
+    if(d.periodAssignment)periodAssignment=d.periodAssignment;
+    // legacy compat: old strings format
+    if(d.strings&&!d.stringList){
+      stringList[0].players=d.strings.s1||[];
+      stringList[1].players=d.strings.s2||[];
+    }
     if(d.stringMode)stringMode=d.stringMode;
     if(d.schedule)schedule=d.schedule;
     if(d.currentSlot!=null)currentSlot=d.currentSlot;
@@ -418,15 +464,31 @@ function restore(){
   }catch(e){seasonGames=initSeasonGames();}
 }
 
-// Auto-assign: split present players evenly into s1/s2 by position balance
+function getStringOf(p){
+  const s=stringList.find(s=>s.players.includes(p));
+  return s?s.id:null;
+}
+function getStringById(id){return stringList.find(s=>s.id===id);}
+
+function ensurePeriodAssignment(){
+  const periods=getLeague().periods;
+  if(periodAssignment.length!==periods){
+    periodAssignment=[];
+    for(let i=0;i<periods;i++) periodAssignment.push((stringList[i%stringList.length]||stringList[0]).id);
+  }
+  // Fill any missing with first string
+  while(periodAssignment.length<periods) periodAssignment.push(stringList[0].id);
+}
+
+// Auto-assign: split present players evenly across all strings
 function autoAssignStrings(){
   const pp=present();
-  strings={s1:[],s2:[]};
-  // Try to balance PGs: first PG-eligible → s1, second → s2
+  stringList.forEach(s=>s.players=[]);
   const pgs=pp.filter(p=>allowedPos[p]&&allowedPos[p].includes(1));
   const nonPgs=pp.filter(p=>!(allowedPos[p]&&allowedPos[p].includes(1)));
-  pgs.forEach((p,i)=>{i%2===0?strings.s1.push(p):strings.s2.push(p);});
-  nonPgs.forEach((p,i)=>{i%2===0?strings.s1.push(p):strings.s2.push(p);});
+  pgs.forEach((p,i)=>stringList[i%stringList.length].players.push(p));
+  nonPgs.forEach((p,i)=>stringList[i%stringList.length].players.push(p));
+  ensurePeriodAssignment();
 }
 
 // ─── Tab switching ─────────────────────────────────────────────────────────
@@ -460,90 +522,288 @@ function renderAttend(){
 }
 
 // ─── Strings panel ─────────────────────────────────────────────────────────
-let stringMoveSel=null; // {player, fromString}
+const STRING_COLORS=[
+  {color:'#378ADD',bg:'#dbeeff'},{color:'#7F77DD',bg:'#f0eeff'},
+  {color:'#1D9E75',bg:'#d4f0e4'},{color:'#BA7517',bg:'#fff8e8'},
+  {color:'#E24B4A',bg:'#ffe8e8'},{color:'#666',bg:'#f0f0f0'},
+];
 
 function renderStrings(){
   const body=document.getElementById('strings-panel-body');
-  // Update mode toggle buttons
-  document.querySelectorAll('[data-action="set-string-mode"]').forEach(b=>{
-    b.classList.toggle('active',b.dataset.val===stringMode);
-  });
-
-  if(stringMode==='open'){
-    body.innerHTML='<div style="color:#888;font-size:13px;background:#fff;border-radius:10px;padding:1rem;border:.5px solid #ddd">'
-      +'Open rotation — the optimizer balances all present players freely across all slots.</div>';
-    return;
-  }
-
+  document.querySelectorAll('[data-action="set-string-mode"]').forEach(b=>b.classList.toggle('active',b.dataset.val===stringMode));
+  if(stringMode==='open'){body.innerHTML='<div style="color:#888;font-size:13px;background:#fff;border-radius:10px;padding:1rem;border:.5px solid #ddd">Open rotation — the optimizer balances all present players freely across all slots.</div>';return;}
+  ensurePeriodAssignment();
   const pp=present();
-  // Clean up strings — remove absent players
-  strings.s1=strings.s1.filter(p=>ALL.includes(p));
-  strings.s2=strings.s2.filter(p=>ALL.includes(p));
-
-  const unassigned=pp.filter(p=>!strings.s1.includes(p)&&!strings.s2.includes(p));
-
-  const lg=getLeague();
-  const hint=stringMoveSel
-    ?'Tap a player in String 1 or String 2 to swap, or tap the same player to cancel.'
-    :'Tap a player to move them between strings.';
+  // Remove absent from strings
+  stringList.forEach(s=>s.players=s.players.filter(p=>ALL.includes(p)));
+  const assigned=new Set(stringList.reduce(function(acc,s){return acc.concat(s.players);},[]));
+  const unassigned=pp.filter(p=>!assigned.has(p));
 
   body.innerHTML='';
 
-  // Period assignment info
-  const infoEl=document.createElement('div');
-  infoEl.style.cssText='font-size:12px;color:#666;background:#fff;border-radius:8px;border:.5px solid #ddd;padding:8px 12px;margin-bottom:.75rem;line-height:1.6';
-  if(lg.periods===2){
-    infoEl.innerHTML='<span class="string-badge s1-badge">String 1</span> plays <strong>Half 1</strong> &nbsp;·&nbsp; <span class="string-badge s2-badge">String 2</span> plays <strong>Half 2</strong>';
-  } else {
-    infoEl.innerHTML='<span class="string-badge s1-badge">String 1</span> plays <strong>Q1 &amp; Q3</strong> &nbsp;·&nbsp; <span class="string-badge s2-badge">String 2</span> plays <strong>Q2 &amp; Q4</strong>';
-  }
-  body.appendChild(infoEl);
+  // ── Period assignment timeline ─────────────────────────────────────────
+  const lg=getLeague();
+  const timelineWrap=document.createElement('div');
+  timelineWrap.style.cssText='margin-bottom:1rem';
+  const tlLabel=document.createElement('div');
+  tlLabel.style.cssText='font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px';
+  tlLabel.textContent='Period order — drag to rearrange';
+  timelineWrap.appendChild(tlLabel);
+  const timeline=document.createElement('div');
+  timeline.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
+  timeline.id='period-timeline';
+  periodAssignment.forEach((sid,pidx)=>{
+    const str=getStringById(sid)||stringList[0];
+    const pill=document.createElement('div');
+    pill.style.cssText='display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:2px solid '+str.color+';background:'+str.bg+';cursor:grab;user-select:none;font-size:13px;font-weight:500;color:'+str.color;
+    pill.innerHTML='<span style="font-size:10px;opacity:.6">'+(pidx+1)+'.</span> '+lg.periodName+' '+(pidx+1)+' &nbsp;<span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:999px;background:'+str.color+';color:#fff">'+str.name+'</span><span style="opacity:.4;margin-left:4px">⠿</span>';
+    pill.draggable=true;pill.dataset.pidx=pidx;
+    // Touch drag
+    let touchPeriodSrc=null,tGhost=null;
+    pill.addEventListener('touchstart',e=>{
+      touchPeriodSrc=pidx;
+      tGhost=document.createElement('div');tGhost.textContent=pill.innerText;
+      tGhost.style.cssText='position:fixed;padding:7px 12px;border-radius:8px;background:'+str.color+';color:#fff;font-size:13px;font-weight:500;pointer-events:none;z-index:999;opacity:.9;transform:translate(-50%,-50%)';
+      document.body.appendChild(tGhost);
+    },{passive:true});
+    pill.addEventListener('touchmove',e=>{
+      if(!tGhost)return;
+      const t=e.touches[0];tGhost.style.left=t.clientX+'px';tGhost.style.top=t.clientY+'px';
+      document.querySelectorAll('#period-timeline > div').forEach(el=>el.style.outline='');
+      tGhost.style.display='none';const under=document.elementFromPoint(t.clientX,t.clientY);tGhost.style.display='';
+      if(under){const tp=under.closest('#period-timeline > div');if(tp&&tp!==pill)tp.style.outline='2px solid #EF9F27';}
+    },{passive:true});
+    pill.addEventListener('touchend',e=>{
+      if(tGhost){tGhost.remove();tGhost=null;}
+      document.querySelectorAll('#period-timeline > div').forEach(el=>el.style.outline='');
+      if(touchPeriodSrc==null)return;
+      const t=e.changedTouches[0];
+      tGhost&&tGhost.remove();
+      const under=document.elementFromPoint(t.clientX,t.clientY);
+      if(under){const tp=under.closest('#period-timeline > div');if(tp&&+tp.dataset.pidx!==touchPeriodSrc){swapPeriodAssignment(touchPeriodSrc,+tp.dataset.pidx);return;}}
+      touchPeriodSrc=null;renderStrings();
+    },{passive:true});
+    // Mouse drag
+    pill.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',pidx);pill.style.opacity='.5';});
+    pill.addEventListener('dragend',()=>{pill.style.opacity='';});
+    pill.addEventListener('dragover',e=>{e.preventDefault();pill.style.outline='2px solid #EF9F27';});
+    pill.addEventListener('dragleave',()=>{pill.style.outline='';});
+    pill.addEventListener('drop',e=>{e.preventDefault();pill.style.outline='';const from=+e.dataTransfer.getData('text/plain');if(from!==pidx)swapPeriodAssignment(from,pidx);});
+    timeline.appendChild(pill);
+  });
+  timelineWrap.appendChild(timeline);
+  body.appendChild(timelineWrap);
 
-  const hintEl=document.createElement('div');
-  hintEl.style.cssText='font-size:12px;color:#888;margin-bottom:.75rem';
-  hintEl.textContent=hint;
-  body.appendChild(hintEl);
-
-  // Auto-assign button
+  // ── Add string button ──────────────────────────────────────────────────
+  const addWrap=document.createElement('div');
+  addWrap.style.cssText='display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap';
+  const addBtn=document.createElement('button');
+  addBtn.textContent='+ Add string';
+  addBtn.style.cssText='padding:7px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #1D9E75;background:#d4f0e4;color:#085041';
+  addBtn.dataset.action='add-string';
   const autoBtn=document.createElement('button');
-  autoBtn.textContent='⟳ Auto-assign evenly';
-  autoBtn.style.cssText='padding:7px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #ccc;background:#f0f0f0;color:#555;margin-bottom:.75rem';
+  autoBtn.textContent='⟳ Auto-assign';
+  autoBtn.style.cssText='padding:7px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #ccc;background:#f0f0f0;color:#555';
   autoBtn.dataset.action='auto-assign-strings';
-  body.appendChild(autoBtn);
+  addWrap.appendChild(addBtn);addWrap.appendChild(autoBtn);body.appendChild(addWrap);
 
-  ['s1','s2'].forEach(key=>{
-    const sec=document.createElement('div');sec.className='string-section';
-    const title=document.createElement('div');title.className='string-title';
-    title.innerHTML='<span class="string-badge '+(key==='s1'?'s1-badge':'s2-badge')+'">'+(key==='s1'?'String 1':'String 2')+'</span>'
-      +' <span style="font-size:12px;color:#888;font-weight:400">'+(strings[key].length)+' players</span>';
-    sec.appendChild(title);
-    const roster=document.createElement('div');roster.className='string-roster';
-    strings[key].forEach(p=>{
-      const chip=document.createElement('div');
-      const isSelected=stringMoveSel&&stringMoveSel.player===p;
-      chip.className='splayer-chip '+(key==='s1'?'s1':'s2')+(isSelected?' selected-for-move':'');
-      chip.textContent=p;
-      chip.dataset.action='string-tap';chip.dataset.player=p;chip.dataset.string=key;
-      roster.appendChild(chip);
+  // ── String sections ────────────────────────────────────────────────────
+  stringList.forEach((str,si)=>{
+    const sec=document.createElement('div');
+    sec.className='string-section';sec.style.cssText='border-left:3px solid '+str.color+';padding-left:.75rem;background:#fff;border-radius:0 10px 10px 0;border:.5px solid #ddd;border-left:3px solid '+str.color+';padding:.75rem 1rem;margin-bottom:.75rem';
+
+    // Header row: name + period tags + delete
+    const hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:.6rem;flex-wrap:wrap';
+    const badge=document.createElement('span');
+    badge.style.cssText='padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:'+str.bg+';color:'+str.color+';border:1.5px solid '+str.color;
+    badge.textContent=str.name;
+
+    // Which periods does this string play?
+    const myPeriods=periodAssignment.map((sid,pi)=>sid===str.id?lg.periodName+' '+(pi+1):null).filter(Boolean);
+    const periodTags=myPeriods.map(p=>'<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+str.bg+';color:'+str.color+';border:1px solid '+str.color+'">'+p+'</span>').join(' ');
+
+    const delBtn=document.createElement('button');
+    delBtn.textContent='✕';delBtn.style.cssText='margin-left:auto;padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #ddd;background:#f5f5f5;color:#999';
+    delBtn.dataset.action='del-string';delBtn.dataset.stridx=si;
+    hdr.appendChild(badge);
+    if(periodTags)hdr.innerHTML+='<span style="display:flex;gap:3px;flex-wrap:wrap">'+periodTags+'</span>';
+    hdr.appendChild(delBtn);sec.appendChild(hdr);
+
+    // ── Position grid ─────────────────────────────────────────────────
+    if(!str.posLayout) str.posLayout={1:[],2:[],3:[],4:[],5:[]};
+    // Sync: players not yet in any column → assign to first allowed pos
+    const allInGrid=[];
+    for(let pos=1;pos<=5;pos++) allInGrid.push.apply(allInGrid,str.posLayout[pos]||[]);
+    str.players.forEach(function(p){
+      if(!allInGrid.includes(p)){
+        const firstPos=(allowedPos[p]&&allowedPos[p][0])||1;
+        if(!str.posLayout[firstPos])str.posLayout[firstPos]=[];
+        str.posLayout[firstPos].push(p);
+      }
     });
-    if(strings[key].length===0){
-      const emp=document.createElement('div');emp.style.cssText='font-size:12px;color:#ccc;font-style:italic;padding:4px 0';
-      emp.textContent='No players assigned';roster.appendChild(emp);
+    // Remove players no longer in string from grid
+    for(let pos=1;pos<=5;pos++) str.posLayout[pos]=(str.posLayout[pos]||[]).filter(function(p){return str.players.includes(p);});
+
+    const posLabels=['PG','2','3','4','5'];
+
+    // Single-row grid: one cell per position, shows the first player assigned there
+    const gridWrap=document.createElement('div');
+    gridWrap.style.cssText='display:flex;gap:4px;margin-top:.4rem';
+
+    for(let pos=1;pos<=5;pos++){
+      const col=document.createElement('div');
+      col.style.cssText='flex:1;display:flex;flex-direction:column;gap:3px;align-items:center';
+
+      // Column header
+      const colHdr=document.createElement('div');
+      colHdr.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:'+str.color+';margin-bottom:2px';
+      colHdr.textContent=posLabels[pos-1];
+      col.appendChild(colHdr);
+
+      // Cell
+      const cell=document.createElement('div');
+      cell.style.cssText='width:100%;min-height:44px;border-radius:8px;border:1.5px dashed '+str.color+'55;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px;background:'+str.bg+'66;cursor:pointer;transition:background .1s';
+      cell.dataset.action='str-cell-tap';cell.dataset.stridx=si;cell.dataset.pos=pos;
+
+      const playersInPos=str.posLayout[pos]||[];
+      if(playersInPos.length>0){
+        // Show all players in this position stacked
+        playersInPos.forEach(function(p){
+          const isAllowed=allowedPos[p]&&allowedPos[p].includes(pos);
+          const isSel=strPosSel&&strPosSel.stridx===si&&strPosSel.player===p;
+          const chip=document.createElement('div');
+          chip.style.cssText='width:100%;padding:5px 3px;border-radius:6px;font-size:11px;font-weight:600;text-align:center;cursor:pointer;user-select:none;color:#fff;margin-bottom:2px;'
+            +'background:'+(isSel?'#EF9F27':str.color)+';'
+            +(isAllowed?'':'opacity:.55;text-decoration:line-through;')
+            +(isSel?'box-shadow:0 0 0 2px #EF9F27,0 0 0 4px #fff;':'');
+          chip.textContent=p;
+          chip.dataset.action='str-chip-tap';chip.dataset.stridx=si;chip.dataset.player=p;chip.dataset.pos=pos;
+
+          // Touch drag
+          var chipGhost=null;
+          chip.addEventListener('touchstart',function(e){
+            strPosSel={stridx:si,player:p,fromPos:pos};
+            chipGhost=document.createElement('div');chipGhost.textContent=p;
+            chipGhost.style.cssText='position:fixed;padding:5px 10px;border-radius:6px;background:'+str.color+';color:#fff;font-size:12px;font-weight:600;pointer-events:none;z-index:999;opacity:.9;transform:translate(-50%,-50%)';
+            document.body.appendChild(chipGhost);
+            renderStrings();
+          },{passive:true});
+          chip.addEventListener('touchmove',function(e){
+            if(!chipGhost)return;
+            var t=e.touches[0];chipGhost.style.left=t.clientX+'px';chipGhost.style.top=t.clientY+'px';
+            document.querySelectorAll('[data-action="str-cell-tap"]').forEach(function(c){c.style.background='';});
+            chipGhost.style.display='none';var under=document.elementFromPoint(t.clientX,t.clientY);chipGhost.style.display='';
+            if(under){var tc=under.closest('[data-action="str-cell-tap"]');if(tc)tc.style.background='#fff3cd';}
+          },{passive:true});
+          chip.addEventListener('touchend',function(e){
+            if(chipGhost){chipGhost.remove();chipGhost=null;}
+            document.querySelectorAll('[data-action="str-cell-tap"]').forEach(function(c){c.style.background='';});
+            var t=e.changedTouches[0];
+            var under=document.elementFromPoint(t.clientX,t.clientY);
+            if(under){
+              var tc=under.closest('[data-action="str-cell-tap"]');
+              if(tc&&+tc.dataset.stridx===si&&+tc.dataset.pos!==pos){
+                movePlayerToPos(si,p,pos,+tc.dataset.pos);return;
+              }
+            }
+            strPosSel=null;renderStrings();
+          },{passive:true});
+          cell.appendChild(chip);
+        });
+      } else {
+        var hint=document.createElement('div');
+        hint.style.cssText='font-size:10px;color:'+str.color+'55;text-align:center';
+        hint.textContent='empty';
+        cell.appendChild(hint);
+      }
+      col.appendChild(cell);
+      gridWrap.appendChild(col);
     }
-    sec.appendChild(roster);body.appendChild(sec);
+    sec.appendChild(gridWrap);
+
+    // Selection hint
+    if(strPosSel&&strPosSel.stridx===si){
+      var selHint=document.createElement('div');
+      selHint.style.cssText='font-size:11px;color:#633806;background:#fff8e8;border-radius:6px;padding:4px 8px;margin-top:4px;border:1px solid #EF9F27';
+      selHint.textContent='Moving '+strPosSel.player+' — tap a position column to place them there, or tap again to cancel.';
+      sec.appendChild(selHint);
+    }
+
+    // ── Add player to this string ──────────────────────────────────────
+    // Show all players not yet in this string as tappable chips
+    const addLabel=document.createElement('div');
+    addLabel.style.cssText='font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-top:.6rem;margin-bottom:4px';
+    addLabel.textContent='Add player to '+str.name+':';
+    sec.appendChild(addLabel);
+
+    const addPool=document.createElement('div');
+    addPool.style.cssText='display:flex;flex-wrap:wrap;gap:4px';
+
+    // Players not in this string (present or all)
+    var notInString=ALL.filter(function(p){return !str.players.includes(p);});
+    if(notInString.length===0){
+      var none=document.createElement('span');none.style.cssText='font-size:11px;color:#bbb;font-style:italic';none.textContent='All players assigned';addPool.appendChild(none);
+    } else {
+      notInString.forEach(function(p){
+        var inOtherStr=stringList.some(function(s,idx){return idx!==si&&s.players.includes(p);});
+        var chip=document.createElement('div');
+        chip.style.cssText='padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid '+(inOtherStr?str.color+'88':'#ccc')+';background:'+(inOtherStr?str.bg:'#f5f5f5')+';color:'+(inOtherStr?str.color:'#555');
+        var pos=(allowedPos[p]||[]).map(function(v){return v===1?'PG':v;}).join('/');
+        chip.innerHTML=p+'<span style="font-size:10px;color:#aaa;margin-left:4px">'+pos+'</span>';
+        chip.dataset.action='add-to-string';chip.dataset.stridx=si;chip.dataset.player=p;
+        addPool.appendChild(chip);
+      });
+    }
+    sec.appendChild(addPool);
+
+    // Remove row
+    var removeRow=document.createElement('div');
+    removeRow.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-top:.5rem';
+    str.players.forEach(function(p){
+      var btn=document.createElement('span');
+      btn.style.cssText='font-size:11px;color:'+str.color+';cursor:pointer;padding:2px 6px;border-radius:4px;border:1px solid '+str.color+'44;background:'+str.bg;
+      btn.innerHTML=p+' <span data-action="remove-from-string" data-player="'+p+'" data-stridx="'+si+'">✕</span>';
+      removeRow.appendChild(btn);
+    });
+    sec.appendChild(removeRow);
+    body.appendChild(sec);
   });
 
-  if(unassigned.length){
-    const sec=document.createElement('div');sec.className='string-section';
-    sec.innerHTML='<div class="string-title"><span style="font-size:13px;color:#999">Unassigned (present)</span></div>';
-    const roster=document.createElement('div');roster.className='string-roster';
+  // ── Unassigned pool ────────────────────────────────────────────────────
+  if(unassigned.length||pp.length===0){
+    const sec=document.createElement('div');
+    sec.style.cssText='background:#fff;border-radius:10px;border:.5px solid #ddd;padding:.75rem 1rem;margin-bottom:.75rem';
+    sec.innerHTML='<div style="font-size:12px;font-weight:600;color:#888;margin-bottom:.5rem">Unassigned (tap to add to a string)</div>';
+    const pool=document.createElement('div');pool.style.cssText='display:flex;flex-wrap:wrap;gap:6px';
+    // Select-to-assign state
     unassigned.forEach(p=>{
       const chip=document.createElement('div');
-      chip.className='splayer-chip unassigned';chip.textContent=p;
-      chip.dataset.action='string-tap-unassigned';chip.dataset.player=p;
-      roster.appendChild(chip);
+      chip.style.cssText='padding:5px 12px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #ccc;background:#f5f5f5;color:#555';
+      const pos=(allowedPos[p]||[]).map(pos=>pos===1?'PG':pos).join('/');
+      chip.innerHTML=p+'<span style="font-size:10px;color:#aaa;margin-left:5px">'+pos+'</span>';
+      chip.dataset.action='unassigned-tap';chip.dataset.player=p;
+      pool.appendChild(chip);
     });
-    sec.appendChild(roster);body.appendChild(sec);
+    if(!unassigned.length){const n=document.createElement('div');n.style.cssText='font-size:12px;color:#bbb;font-style:italic';n.textContent='All present players assigned';pool.appendChild(n);}
+    sec.appendChild(pool);body.appendChild(sec);
+  }
+
+  // ── Target string selector (shown when player selected) ───────────────
+  if(stringMoveSel){
+    const sel=document.createElement('div');
+    sel.style.cssText='position:sticky;bottom:0;background:#fff8e8;border:1.5px solid #EF9F27;border-radius:10px;padding:.75rem 1rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:.5rem';
+    sel.innerHTML='<span style="font-size:13px;font-weight:600;color:#633806">Move <strong>'+stringMoveSel.player+'</strong> to:</span>';
+    stringList.forEach((str,si)=>{
+      const btn=document.createElement('button');
+      btn.style.cssText='padding:6px 12px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid '+str.color+';background:'+str.bg+';color:'+str.color;
+      btn.textContent=str.name;btn.dataset.action='move-to-string';btn.dataset.stridx=si;
+      sel.appendChild(btn);
+    });
+    const cancelBtn=document.createElement('button');
+    cancelBtn.style.cssText='padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid #ccc;background:#f0f0f0;color:#555;margin-left:auto';
+    cancelBtn.textContent='Cancel';cancelBtn.dataset.action='cancel-string-move';
+    sel.appendChild(cancelBtn);body.appendChild(sel);
   }
 }
 
@@ -633,53 +893,98 @@ function generateSchedule(){
   currentSlot=0;renderCourt();renderList();persist();
 }
 
-// ── String mode: each string plays their assigned period(s) ────────────────
-function generateStringSchedule(pp,SLOTS){
-  const lg=getLeague();
-  const spp=getSlotsPerPeriod();
+function movePlayerToPos(stridx, player, fromPos, toPos){
+  var str=stringList[stridx];
+  if(!str)return;
+  if(!str.posLayout)str.posLayout={1:[],2:[],3:[],4:[],5:[]};
+  if(fromPos===toPos){strPosSel=null;renderStrings();return;}
 
-  // Get present players per string, fall back to open if unbalanced
-  const s1=strings.s1.filter(p=>pp.includes(p));
-  const s2=strings.s2.filter(p=>pp.includes(p));
+  // Who is currently in the target slot?
+  var displaced=str.posLayout[toPos]&&str.posLayout[toPos][0]||null;
 
-  if(s1.length<5||s2.length<5){
-    document.getElementById('warn-box').innerHTML='<div class="warn">String 1 or String 2 has fewer than 5 present players. Switching to open rotation.</div>';
-    generateOpenSchedule(pp,SLOTS);return;
+  // Remove moving player from their current slot
+  str.posLayout[fromPos]=(str.posLayout[fromPos]||[]).filter(function(p){return p!==player;});
+
+  if(displaced&&displaced!==player){
+    // Put displaced player into the vacated slot
+    str.posLayout[fromPos]=[displaced];
+    // Remove displaced from target slot
+    str.posLayout[toPos]=str.posLayout[toPos].filter(function(p){return p!==displaced;});
   }
 
+  // Place moving player into target slot (enforce single occupancy)
+  if(!str.posLayout[toPos])str.posLayout[toPos]=[];
+  // Remove any existing occupant beyond the swap already handled
+  str.posLayout[toPos]=str.posLayout[toPos].filter(function(p){return p!==player;});
+  str.posLayout[toPos].unshift(player);
+
+  strPosSel=null;schedule=[];persist();renderStrings();
+}
+
+function swapPeriodAssignment(fromPidx,toPidx){
+  const tmp=periodAssignment[fromPidx];
+  periodAssignment[fromPidx]=periodAssignment[toPidx];
+  periodAssignment[toPidx]=tmp;
+  schedule=[];persist();renderStrings();showMsg('Period order updated — re-optimize to apply.','success-msg');
+}
+
+// ── String mode: each period plays its assigned string ─────────────────────
+function generateStringSchedule(pp,SLOTS){
+  ensurePeriodAssignment();
+  const spp=getSlotsPerPeriod();
+  // Validate all assigned strings have ≥5 present players
+  const uniqueStrings=new Set(periodAssignment);
+  for(const sid of uniqueStrings){
+    const str=getStringById(sid);
+    if(!str){continue;}
+    const present_in_str=str.players.filter(p=>pp.includes(p));
+    if(present_in_str.length<5){
+      document.getElementById('warn-box').innerHTML='<div class="warn">'+str.name+' has fewer than 5 present players. Adjust strings or use Open rotation.</div>';
+      return;
+    }
+  }
   const pgE=pgOrder.filter(p=>pp.includes(p));
   if(!pgE.length){document.getElementById('warn-box').innerHTML='<div class="warn">No PG-eligible players present.</div>';return;}
-
   schedule=[];
-
-  // For each slot, determine which string plays that period
   for(let s=0;s<SLOTS;s++){
-    const periodIdx=Math.floor(s/spp); // 0-based
-    // String 1 plays even periods (0,2 = Half1 or Q1,Q3), String 2 plays odd (1,3 = Half2 or Q2,Q4)
-    const lineup=periodIdx%2===0?s1:s2;
+    const periodIdx=Math.floor(s/spp);
+    const sid=periodAssignment[periodIdx]||periodAssignment[0];
+    const str=getStringById(sid)||stringList[0];
+    const lineup=str.players.filter(p=>pp.includes(p));
     const pgE_str=pgOrder.filter(p=>lineup.includes(p)&&allowedPos[p]&&allowedPos[p].includes(1));
-
-    // Build a mini-schedule for this slot using the string's players
-    // For a full-period string, the same 5 always play — pick best 5 by position fit
-    // Within the period, if spp>1, rotate subs within the string
     const slotInPeriod=s%spp;
-    const picks=pickFiveFromString(lineup,pgE_str,slotInPeriod,spp,s);
-
+    const picks=pickFiveFromString(lineup,pgE_str,slotInPeriod,spp,s,str);
     const st=s*slotMins;
-    schedule.push({
-      label:st+'–'+(st+slotMins),quarter:getPeriodLabel(s),qStart:isBreak(s),isHalf:isHalfTime(s),
+    schedule.push({label:st+'–'+(st+slotMins),quarter:getPeriodLabel(s),qStart:isBreak(s),isHalf:isHalfTime(s),strId:sid,strName:str.name,strColor:str.color,strBg:str.bg,
       p1:picks[0]||'—',p2:picks[1]||'—',p3:picks[2]||'—',p4:picks[3]||'—',p5:picks[4]||'—',
-      bench:pp.filter(p=>!picks.slice(0,5).includes(p))
-    });
+      bench:pp.filter(p=>!picks.slice(0,5).includes(p))});
   }
 }
 
-function pickFiveFromString(lineup,pgEligible,slotInPeriod,spp,globalSlot){
-  // Always pick a PG from this string
-  const pg=pgEligible[slotInPeriod%pgEligible.length]||pgEligible[0]||lineup[0];
+function pickFiveFromString(lineup,pgEligible,slotInPeriod,spp,globalSlot,str){
+  const posLayout=str&&str.posLayout;
+  // Use posLayout if defined — respect coach's position assignments
+  if(posLayout){
+    const picks=[];
+    const pgInPos=(posLayout[1]||[]).filter(p=>lineup.includes(p));
+    const pg=pgInPos[slotInPeriod%Math.max(pgInPos.length,1)]||(pgEligible&&pgEligible[0])||lineup[0];
+    picks.push(pg);
+    for(let pos=2;pos<=5;pos++){
+      const inPos=(posLayout[pos]||[]).filter(p=>lineup.includes(p)&&!picks.includes(p));
+      if(inPos.length){
+        picks.push(inPos[slotInPeriod%inPos.length]);
+      } else {
+        const elig=lineup.filter(p=>!picks.includes(p)&&canPlay(p,pos));
+        if(elig.length)picks.push(elig[0]);
+        else{const fb=lineup.find(p=>!picks.includes(p));if(fb)picks.push(fb);}
+      }
+    }
+    while(picks.length<5){const e=lineup.find(p=>!picks.includes(p));if(e)picks.push(e);else break;}
+    return picks;
+  }
+  // Fallback without posLayout
+  const pg=pgEligible[slotInPeriod%Math.max(pgEligible.length,1)]||pgEligible[0]||lineup[0];
   const rest=lineup.filter(p=>p!==pg);
-
-  // If string has exactly 5, just use them all in position order
   if(lineup.length<=5){
     const picks=[pg];
     for(let pos=2;pos<=5;pos++){
@@ -789,6 +1094,42 @@ function renderCourt(){
 }
 
 // ─── List view with tap-to-swap ────────────────────────────────────────────
+function getSlotString(slotIdx){
+  if(stringMode!=='strings') return null;
+  // If this slot has been manually assigned a string, use that
+  if(schedule[slotIdx]&&schedule[slotIdx].strId){
+    const s=getStringById(schedule[slotIdx].strId);
+    if(s) return s;
+  }
+  const spp=getSlotsPerPeriod();
+  const periodIdx=Math.floor(slotIdx/spp);
+  const sid=periodAssignment[periodIdx];
+  return getStringById(sid)||null;
+}
+
+function swapStringsAtPeriod(periodIdx){
+  // Swap all slots in this period with slots in the next period (if same count)
+  const spp=getSlotsPerPeriod();
+  const SLOTS=getTotalSlots();
+  const startA=periodIdx*spp;
+  const startB=(periodIdx+1)*spp;
+  if(startB+spp>SLOTS) return; // no next period to swap with
+  for(let i=0;i<spp;i++){
+    const a=startA+i, b=startB+i;
+    ['p1','p2','p3','p4','p5'].forEach(pk=>{
+      const tmp=schedule[a][pk]; schedule[a][pk]=schedule[b][pk]; schedule[b][pk]=tmp;
+    });
+    // swap quarters labels too
+    const tmpQ=schedule[a].quarter; schedule[a].quarter=schedule[b].quarter; schedule[b].quarter=tmpQ;
+    // rebuild bench
+    [a,b].forEach(si=>{
+      const slot=schedule[si];
+      slot.bench=present().filter(p=>![slot.p1,slot.p2,slot.p3,slot.p4,slot.p5].includes(p));
+    });
+  }
+  swapSel=null;renderCourt();renderList();persist();
+}
+
 function renderList(){
   const el=document.getElementById('list-content');
   if(!schedule.length){el.innerHTML='<div style="color:#999;font-size:13px;padding:.5rem 0">Generate a schedule first.</div>';return;}
@@ -796,32 +1137,118 @@ function renderList(){
   schedule.forEach(s=>[s.p1,s.p2,s.p3,s.p4,s.p5].forEach(p=>{if(mins[p]!=null)mins[p]+=slotMins;}));
 
   const posKeys=['p1','p2','p3','p4','p5'];
-  let h='<table class="list-table"><thead><tr><th>Time</th><th>PG</th><th>2</th><th>3</th><th>4</th><th>5</th><th>Bench</th></tr></thead><tbody>';
-  let lq='';
+  const spp=getSlotsPerPeriod();
+  const useStrings=stringMode==='strings';
+
+  // Build as DOM for easier period header insertion
+  const wrap=document.createElement('div');
+  const table=document.createElement('table');
+  table.className='list-table';
+  table.innerHTML='<thead><tr><th>Time</th><th>PG</th><th>2</th><th>3</th><th>4</th><th>5</th><th>Bench</th></tr></thead>';
+  const tbody=document.createElement('tbody');
+
+  let lastQ='';
   schedule.forEach((r,si)=>{
-    if(r.quarter!==lq){
-      if(lq!=='')h+='<tr class="q-break-label"><td colspan="7">&#9201; '+(r.isHalf?'Halftime':r.quarter)+'</td></tr>';
-      lq=r.quarter;
+    const periodIdx=Math.floor(si/spp);
+    const str=getSlotString(si); // string object or null
+    const strColor=str?str.color:'#ccc';
+    const strBg=str?str.bg:'#f5f5f5';
+    const strName=str?str.name:'';
+
+    if(r.quarter!==lastQ){
+      // Period header row with string badge + swap button
+      if(lastQ!==''){
+        const headerRow=document.createElement('tr');
+        const headerCell=document.createElement('td');
+        headerCell.colSpan=7;headerCell.style.padding='0';
+        const headerDiv=document.createElement('div');
+        headerDiv.className='period-header';
+        const leftSide=document.createElement('div');
+        leftSide.className='period-label';
+        leftSide.innerHTML='&#9201; '+r.quarter+(useStrings&&str?'&nbsp;<span style="padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;background:'+strBg+';color:'+strColor+';border:1px solid '+strColor+'">'+strName+'</span>':'');
+        headerDiv.appendChild(leftSide);
+        if(useStrings&&periodIdx<getTotalSlots()/spp-1){
+          const swapBtn=document.createElement('button');
+          swapBtn.className='swap-string-btn';
+          swapBtn.textContent='⇄ Swap strings';
+          swapBtn.dataset.action='swap-period';
+          swapBtn.dataset.period=periodIdx;
+          headerDiv.appendChild(swapBtn);
+        }
+        headerCell.appendChild(headerDiv);headerRow.appendChild(headerCell);tbody.appendChild(headerRow);
+      }
+      lastQ=r.quarter;
     }
-    h+='<tr>';
-    h+='<td class="lt-time">'+r.label+'</td>';
+
+    const row=document.createElement('tr');
+    if(useStrings&&str) row.style.borderLeft='3px solid '+strColor;
+
+    // Time cell — tappable to assign a string to this slot
+    const timeCell=document.createElement('td');
+    timeCell.className='lt-time';
+    timeCell.style.cursor=useStrings?'pointer':'default';
+    const isSlotSel=slotStrSel===si;
+    timeCell.innerHTML='<div style="white-space:nowrap">'+r.label+'</div>'
+      +(useStrings&&str?'<div style="font-size:9px;padding:1px 5px;border-radius:4px;background:'+(isSlotSel?'#EF9F27':strColor)+';color:#fff;margin-top:2px;display:inline-block">'+strName+'</div>':'');
+    if(useStrings){
+      timeCell.dataset.action='slot-str-sel';timeCell.dataset.slotidx=si;
+    }
+    row.appendChild(timeCell);
+
+    // Inline string picker shown below this row
+    if(isSlotSel&&useStrings){
+      // We'll add a picker row right after this row — handled after tbody loop
+    }
+
     posKeys.forEach((pk,pi)=>{
+      const td=document.createElement('td');
       const isSel=swapSel&&swapSel.slotIdx===si&&swapSel.posKey===pk;
-      const cls=(pi===0?'lt-pg':'lt-player')+(isSel?' lt-selected':'');
-      h+='<td class="'+cls+'" data-action="list-tap" data-slotidx="'+si+'" data-poskey="'+pk+'">'+r[pk]+'</td>';
+      td.className=(pi===0?'lt-pg':'lt-player')+(isSel?' lt-selected':'');
+      td.textContent=r[pk];
+      td.dataset.action='list-tap';td.dataset.slotidx=si;td.dataset.poskey=pk;
+      row.appendChild(td);
     });
-    h+='<td class="lt-bench">'+(r.bench||[]).join(', ')+'</td>';
-    h+='</tr>';
+
+    const benchCell=document.createElement('td');benchCell.className='lt-bench';benchCell.textContent=(r.bench||[]).join(', ');row.appendChild(benchCell);
+    tbody.appendChild(row);
+
+    // String picker row — appears right under the selected slot
+    if(isSlotSel&&useStrings){
+      const pickerRow=document.createElement('tr');
+      const pickerCell=document.createElement('td');
+      pickerCell.colSpan=7;pickerCell.style.padding='4px 6px 8px';pickerCell.style.background='#fffbf0';
+      const pickerDiv=document.createElement('div');
+      pickerDiv.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap';
+      const lbl=document.createElement('span');
+      lbl.style.cssText='font-size:11px;color:#633806;font-weight:600';lbl.textContent='Apply string:';
+      pickerDiv.appendChild(lbl);
+      stringList.forEach(function(s2){
+        const btn=document.createElement('button');
+        btn.style.cssText='padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid '+s2.color+';background:'+s2.bg+';color:'+s2.color;
+        btn.textContent=s2.name;
+        btn.dataset.action='apply-string-to-slot';btn.dataset.slotidx=si;btn.dataset.strid=s2.id;
+        pickerDiv.appendChild(btn);
+      });
+      const cancelBtn=document.createElement('button');
+      cancelBtn.style.cssText='padding:5px 10px;border-radius:7px;font-size:11px;cursor:pointer;border:1px solid #ccc;background:#f0f0f0;color:#666;margin-left:auto';
+      cancelBtn.textContent='✕';cancelBtn.dataset.action='slot-str-cancel';
+      pickerDiv.appendChild(cancelBtn);
+      pickerCell.appendChild(pickerDiv);pickerRow.appendChild(pickerCell);tbody.appendChild(pickerRow);
+    }
   });
-  h+='</tbody></table>';
-  h+='<div style="margin-top:1rem;background:#fff;border-radius:12px;border:.5px solid #ddd;padding:.75rem 1rem">'
-    +'<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem">Minutes this game</div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:5px">';
-  present().sort((a,b)=>mins[b]-mins[a]).forEach(p=>{
-    h+='<div class="'+(mins[p]<16?'mchip low':'mchip')+'">'+p+': '+mins[p]+'m</div>';
-  });
-  h+='</div></div>';
-  el.innerHTML=h;
+
+  table.appendChild(tbody);wrap.appendChild(table);
+
+  // Minutes summary
+  const minDiv=document.createElement('div');
+  minDiv.style.cssText='margin-top:1rem;background:#fff;border-radius:12px;border:.5px solid #ddd;padding:.75rem 1rem';
+  minDiv.innerHTML='<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem">Minutes this game</div><div style="display:flex;flex-wrap:wrap;gap:5px">'
+    +present().sort((a,b)=>mins[b]-mins[a]).map(p=>'<div class="'+(mins[p]<16?'mchip low':'mchip')+'">'+p+': '+mins[p]+'m</div>').join('')
+    +'</div>';
+  wrap.appendChild(minDiv);
+
+  el.innerHTML='';el.appendChild(wrap);
+  attachListDragHandlers();
 }
 
 // Swap two player cells in the schedule
@@ -829,13 +1256,77 @@ function doListSwap(si1,pk1,si2,pk2){
   const tmp=schedule[si1][pk1];
   schedule[si1][pk1]=schedule[si2][pk2];
   schedule[si2][pk2]=tmp;
-  // Rebuild bench lists for affected slots
   [si1,si2].forEach(si=>{
     const slot=schedule[si];
     const onCourt=[slot.p1,slot.p2,slot.p3,slot.p4,slot.p5];
     slot.bench=present().filter(p=>!onCourt.includes(p));
   });
+  renderCourt(); // keep game view in sync
   persist();
+}
+
+// Touch drag-and-drop state for list view
+let dragListSrc=null; // {slotIdx, posKey}
+
+function attachListDragHandlers(){
+  document.querySelectorAll('[data-action="list-tap"]').forEach(cell=>{
+    const si=+cell.dataset.slotidx, pk=cell.dataset.poskey;
+
+    // Mouse drag (desktop)
+    cell.setAttribute('draggable','true');
+    cell.addEventListener('dragstart',e=>{
+      dragListSrc={slotIdx:si,posKey:pk};
+      e.dataTransfer.effectAllowed='move';
+      cell.style.opacity='0.5';
+    });
+    cell.addEventListener('dragend',()=>{ cell.style.opacity=''; dragListSrc=null; });
+    cell.addEventListener('dragover',e=>{ e.preventDefault(); cell.style.background='#fff3cd'; });
+    cell.addEventListener('dragleave',()=>{ cell.style.background=''; });
+    cell.addEventListener('drop',e=>{
+      e.preventDefault(); cell.style.background='';
+      if(dragListSrc&&!(dragListSrc.slotIdx===si&&dragListSrc.posKey===pk)){
+        doListSwap(dragListSrc.slotIdx,dragListSrc.posKey,si,pk);
+        swapSel=null; dragListSrc=null; renderList();
+      }
+    });
+
+    // Touch drag (iOS)
+    let touchSrc=null, ghost=null;
+    cell.addEventListener('touchstart',e=>{
+      touchSrc={slotIdx:si,posKey:pk,name:cell.textContent.trim()};
+      // Create a ghost label that follows the finger
+      ghost=document.createElement('div');
+      ghost.textContent=touchSrc.name;
+      ghost.style.cssText='position:fixed;padding:6px 14px;border-radius:999px;background:#EF9F27;color:#fff;font-size:14px;font-weight:600;pointer-events:none;z-index:999;opacity:.9;transform:translate(-50%,-50%)';
+      document.body.appendChild(ghost);
+    },{passive:true});
+    cell.addEventListener('touchmove',e=>{
+      if(!ghost)return;
+      const t=e.touches[0];
+      ghost.style.left=t.clientX+'px';ghost.style.top=t.clientY+'px';
+      // Highlight element under finger
+      ghost.style.display='none';
+      const under=document.elementFromPoint(t.clientX,t.clientY);
+      ghost.style.display='';
+      document.querySelectorAll('[data-action="list-tap"]').forEach(c=>c.style.background='');
+      if(under){const tc=under.closest('[data-action="list-tap"]');if(tc&&tc!==cell)tc.style.background='#fff3cd';}
+    },{passive:true});
+    cell.addEventListener('touchend',e=>{
+      if(ghost){ghost.remove();ghost=null;}
+      document.querySelectorAll('[data-action="list-tap"]').forEach(c=>c.style.background='');
+      if(!touchSrc)return;
+      const t=e.changedTouches[0];
+      const under=document.elementFromPoint(t.clientX,t.clientY);
+      if(under){
+        const tc=under.closest('[data-action="list-tap"]');
+        if(tc&&!(+tc.dataset.slotidx===touchSrc.slotIdx&&tc.dataset.poskey===touchSrc.posKey)){
+          doListSwap(touchSrc.slotIdx,touchSrc.posKey,+tc.dataset.slotidx,tc.dataset.poskey);
+          swapSel=null;renderList();return;
+        }
+      }
+      touchSrc=null;
+    },{passive:true});
+  });
 }
 
 // ─── League Settings ───────────────────────────────────────────────────────
@@ -874,7 +1365,7 @@ function saveSnapshot(){
   const label='Snapshot '+(snapshots.length+1);
   const timestamp=now.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+pad(now.getHours())+':'+pad(now.getMinutes());
   const pp=present();
-  snapshots.push({label,timestamp,absent:[...absent],schedule,currentSlot,pgOrder:[...pgOrder],allowedPos:JSON.parse(JSON.stringify(allowedPos)),playerPriority:JSON.parse(JSON.stringify(playerPriority)),strings:JSON.parse(JSON.stringify(strings)),stringMode,slotMins,leagueId,summary:pp.join(', ')+' · slot '+(currentSlot+1)+'/'+schedule.length});
+  snapshots.push({label,timestamp,absent:[...absent],schedule,currentSlot,pgOrder:[...pgOrder],allowedPos:JSON.parse(JSON.stringify(allowedPos)),playerPriority:JSON.parse(JSON.stringify(playerPriority)),stringList:JSON.parse(JSON.stringify(stringList)),periodAssignment:[...periodAssignment],stringMode,slotMins,leagueId,summary:pp.join(', ')+' · slot '+(currentSlot+1)+'/'+schedule.length});
   persist();renderSeason();showMsg('Snapshot saved!','success-msg');
 }
 
@@ -882,7 +1373,7 @@ function loadSnapshot(idx){
   const s=snapshots[idx];if(!s)return;
   absent=new Set(s.absent||[]);schedule=s.schedule||[];currentSlot=s.currentSlot||0;
   pgOrder=s.pgOrder||pgOrder;allowedPos=s.allowedPos||allowedPos;playerPriority=s.playerPriority||{};
-  if(s.strings)strings=s.strings;if(s.stringMode)stringMode=s.stringMode;
+  if(s.stringList)stringList=s.stringList;if(s.periodAssignment)periodAssignment=s.periodAssignment;if(s.stringMode)stringMode=s.stringMode;
   slotMins=s.slotMins||slotMins;leagueId=s.leagueId||leagueId;
   persist();renderAttend();renderCourt();renderList();renderSettings();renderStrings();
   switchTab('court');showMsg('Snapshot loaded — back to '+s.label+'.','success-msg');
@@ -948,7 +1439,7 @@ function renderSeason(){
   }else{
     gIdx=viewingGame;const g=seasonGames[gIdx];gLabel=g.label+' — '+g.date;gs=g.stats;showDel=true;gameSchedule=g.schedule||null;gameSlotMins=g.slotMins||8;
   }
-  const sorted=[...ALL].sort((a,b)=>(gs[b]?.total||0)-(gs[a]?.total||0));
+  const sorted=[...ALL].sort((a,b)=>((gs[b]&&gs[b].total)||0)-((gs[a]&&gs[a].total)||0));
   const cell=v=>v>0?'<td class="pos-cell">'+v+'m</td>':'<td style="color:#ddd">—</td>';
   let tbl='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;flex-wrap:wrap;gap:6px"><span style="font-size:13px;font-weight:600;color:#1a1a1a">'+gLabel+'</span>';
   if(showDel){tbl+='<div style="display:flex;align-items:center;gap:6px"><button class="del-game-btn" data-action="del-confirm" data-idx="'+gIdx+'">&#128465; Remove</button><div class="del-confirm" id="del-confirm-'+gIdx+'"><span style="font-size:12px;color:#791F1F">Sure?</span><button class="del-yes" data-action="del-game" data-idx="'+gIdx+'">Yes</button><button class="del-no" data-action="del-cancel" data-idx="'+gIdx+'">No</button></div></div>';}
@@ -1022,7 +1513,8 @@ function confirmAddPlayer(){
 function removePlayer(name){
   const idx=ALL.indexOf(name);if(idx===-1)return;
   ALL.splice(idx,1);absent.delete(name);delete allowedPos[name];delete playerPriority[name];
-  pgOrder=pgOrder.filter(p=>p!==name);strings.s1=strings.s1.filter(p=>p!==name);strings.s2=strings.s2.filter(p=>p!==name);
+  pgOrder=pgOrder.filter(p=>p!==name);
+  stringList.forEach(s=>s.players=s.players.filter(p=>p!==name));
   schedule=[];persist();renderAttend();showMsg(name+' removed.','success-msg');
 }
 
@@ -1057,49 +1549,133 @@ document.addEventListener('click',function(e){
   else if(action==='set-priority'){
     playerPriority[el.dataset.player]=el.dataset.level;schedule=[];persist();renderPosEditor();
   }
-  else if(action==='set-string-mode'){
-    stringMode=el.dataset.val;schedule=[];persist();renderStrings();
+  else if(action==='set-string-mode'){stringMode=el.dataset.val;schedule=[];persist();renderStrings();}
+  else if(action==='add-string'){
+    const idx=stringList.length;
+    const c=STRING_COLORS[idx%STRING_COLORS.length];
+    stringList.push({id:'s'+(idx+1),name:'String '+(idx+1),color:c.color,bg:c.bg,players:[]});
+    ensurePeriodAssignment();schedule=[];persist();renderStrings();
   }
-  else if(action==='auto-assign-strings'){
-    autoAssignStrings();persist();renderStrings();
+  else if(action==='del-string'){
+    const si=+el.dataset.stridx;
+    if(stringList.length<=1){showMsg('Need at least one string.','warn');return;}
+    stringList.splice(si,1);
+    // Remove from period assignment
+    const fallback=stringList[0].id;
+    periodAssignment=periodAssignment.map(sid=>stringList.find(s=>s.id===sid)?sid:fallback);
+    schedule=[];persist();renderStrings();
   }
-  else if(action==='string-tap'){
-    const p=el.dataset.player,fromStr=el.dataset.string;
-    if(!stringMoveSel){stringMoveSel={player:p,fromString:fromStr};}
-    else if(stringMoveSel.player===p){stringMoveSel=null;}
-    else{
-      // Move the tapped player to the opposite string, move selector to their string
-      const toStr=el.dataset.string;
-      const movingPlayer=stringMoveSel.player;
-      const fromMoving=stringMoveSel.fromString;
-      // Swap: movingPlayer goes to toStr, tapped player goes to fromMoving
-      strings[fromMoving]=strings[fromMoving].filter(x=>x!==movingPlayer);
-      strings[toStr]=strings[toStr].filter(x=>x!==p);
-      strings[toStr].push(movingPlayer);
-      strings[fromMoving].push(p);
-      stringMoveSel=null;schedule=[];persist();
+  else if(action==='auto-assign-strings'){autoAssignStrings();schedule=[];persist();renderStrings();}
+  else if(action==='add-to-string'){
+    var p=el.dataset.player,si=+el.dataset.stridx;
+    var str2=stringList[si];
+    if(!str2.players.includes(p)) str2.players.push(p);
+    if(!str2.posLayout) str2.posLayout={1:[],2:[],3:[],4:[],5:[]};
+    // Check if already placed
+    var alreadyPlaced=false;
+    for(var chk=1;chk<=5;chk++){if((str2.posLayout[chk]||[]).includes(p)){alreadyPlaced=true;break;}}
+    if(!alreadyPlaced){
+      // Find first position slot that is empty and allowed, else first empty slot, else first allowed
+      var fp=0;
+      var allowedForP=allowedPos[p]||[1];
+      for(var ai=0;ai<allowedForP.length;ai++){
+        var tryPos=allowedForP[ai];
+        if(!(str2.posLayout[tryPos]&&str2.posLayout[tryPos].length)){fp=tryPos;break;}
+      }
+      if(!fp){
+        // No empty allowed slot — find any empty slot
+        for(var ep=1;ep<=5;ep++){if(!(str2.posLayout[ep]&&str2.posLayout[ep].length)){fp=ep;break;}}
+      }
+      if(!fp) fp=(allowedForP[0])||1; // fallback: displace whoever is at first allowed pos
+      if(!str2.posLayout[fp])str2.posLayout[fp]=[];
+      // Displace existing if slot taken
+      if(str2.posLayout[fp].length>0){
+        var ousted=str2.posLayout[fp][0];
+        str2.posLayout[fp]=[p];
+        // Move ousted to their first empty allowed pos, or remove them from layout
+        var oustedAllowed=allowedPos[ousted]||[];
+        var placed2=false;
+        for(var oi=0;oi<oustedAllowed.length;oi++){
+          var op=oustedAllowed[oi];
+          if(!(str2.posLayout[op]&&str2.posLayout[op].length)){str2.posLayout[op]=[ousted];placed2=true;break;}
+        }
+        if(!placed2){
+          // Find any empty slot for ousted
+          for(var ep2=1;ep2<=5;ep2++){
+            if(!(str2.posLayout[ep2]&&str2.posLayout[ep2].length)){str2.posLayout[ep2]=[ousted];placed2=true;break;}
+          }
+        }
+        // If truly no room, ousted stays unplaced (will show in add pool)
+      } else {
+        str2.posLayout[fp]=[p];
+      }
+    }
+    strPosSel=null;schedule=[];persist();renderStrings();
+  }
+  else if(action==='str-chip-tap'){
+    const p=el.dataset.player,si=+el.dataset.stridx,pos=+el.dataset.pos;
+    if(strPosSel&&strPosSel.stridx===si&&strPosSel.player===p){
+      strPosSel=null; // deselect
+    } else {
+      strPosSel={stridx:si,player:p,fromPos:pos};
     }
     renderStrings();
   }
-  else if(action==='string-tap-unassigned'){
+  else if(action==='str-cell-tap'){
+    if(strPosSel&&strPosSel.stridx===+el.dataset.stridx){
+      movePlayerToPos(strPosSel.stridx,strPosSel.player,strPosSel.fromPos,+el.dataset.pos);
+    }
+  }
+  else if(action==='string-player-tap'){
+    stringMoveSel={player:el.dataset.player,fromIdx:+el.dataset.stridx};renderStrings();
+  }
+  else if(action==='remove-from-string'){
+    const si=+el.dataset.stridx,p=el.dataset.player;
+    stringList[si].players=stringList[si].players.filter(x=>x!==p);
+    schedule=[];persist();renderStrings();
+  }
+  else if(action==='move-to-string'){
+    if(!stringMoveSel)return;
+    const toIdx=+el.dataset.stridx;
+    // Remove from wherever they are
+    stringList.forEach(s=>s.players=s.players.filter(x=>x!==stringMoveSel.player));
+    stringList[toIdx].players.push(stringMoveSel.player);
+    stringMoveSel=null;schedule=[];persist();renderStrings();
+  }
+  else if(action==='cancel-string-move'){stringMoveSel=null;renderStrings();}
+  else if(action==='unassigned-tap'){
     const p=el.dataset.player;
     if(stringMoveSel){
-      // Move the selected player to the string that has fewer
-      const toStr=strings.s1.length<=strings.s2.length?'s1':'s2';
-      strings[stringMoveSel.fromString]=strings[stringMoveSel.fromString].filter(x=>x!==stringMoveSel.player);
-      strings[toStr].push(stringMoveSel.player);
+      // Move selected player here (to smallest string), clear sel
+      const smallest=stringList.reduce((a,b)=>a.players.length<=b.players.length?a:b);
+      stringList.forEach(s=>s.players=s.players.filter(x=>x!==stringMoveSel.player));
+      smallest.players.push(stringMoveSel.player);
       stringMoveSel=null;
     }
-    // Also assign the unassigned player
-    const assignTo=strings.s1.length<=strings.s2.length?'s1':'s2';
-    if(!strings.s1.includes(p)&&!strings.s2.includes(p))strings[assignTo].push(p);
+    // Assign unassigned player to smallest string
+    const smallest=stringList.reduce((a,b)=>a.players.length<=b.players.length?a:b);
+    if(!stringList.some(s=>s.players.includes(p)))smallest.players.push(p);
     schedule=[];persist();renderStrings();
+  }
+  else if(action==='slot-str-sel'){
+    const si=+el.dataset.slotidx;
+    slotStrSel=(slotStrSel===si)?null:si;
+    swapSel=null;renderList();
+  }
+  else if(action==='apply-string-to-slot'){
+    applyStringToSlot(+el.dataset.slotidx,el.dataset.strid);
+  }
+  else if(action==='slot-str-cancel'){
+    slotStrSel=null;renderList();
+  }
+  else if(action==='swap-period'){
+    swapStringsAtPeriod(+el.dataset.period);
   }
   else if(action==='list-tap'){
     const si=+el.dataset.slotidx,pk=el.dataset.poskey;
     if(!swapSel){swapSel={slotIdx:si,posKey:pk};}
     else if(swapSel.slotIdx===si&&swapSel.posKey===pk){swapSel=null;}
-    else{doListSwap(swapSel.slotIdx,swapSel.posKey,si,pk);swapSel=null;renderCourt();}
+    else{doListSwap(swapSel.slotIdx,swapSel.posKey,si,pk);swapSel=null;}
     renderList();
   }
   else if(action==='pg-reorder'){
@@ -1153,7 +1729,7 @@ document.querySelectorAll('#tab-row .tab').forEach(tab=>{tab.addEventListener('c
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 restore();
-if(!strings.s1.length&&!strings.s2.length)autoAssignStrings();
+if(!stringList.some(s=>s.players.length>0))autoAssignStrings();
 renderAttend();renderCourt();renderList();renderSettings();renderStrings();
 </script>
 </body>
