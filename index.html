@@ -156,9 +156,12 @@ button{-webkit-appearance:none;appearance:none;font-family:inherit}
 .str-player-chip.selected{box-shadow:0 0 0 2px #EF9F27;outline:2px solid #EF9F27}
 .str-player-chip.not-allowed{opacity:.5;text-decoration:line-through}
 /* lock */
-body.locked .gen-btn,body.locked .season-add-btn,body.locked .ledger-btn{pointer-events:none;opacity:.35}
+body.locked .season-add-btn,body.locked .ledger-btn{pointer-events:none;opacity:.35}
 body.locked .tab[data-tab="attend"],body.locked .tab[data-tab="positions"],body.locked .tab[data-tab="pgorder"],body.locked .tab[data-tab="strings"],body.locked .tab[data-tab="settings"]{pointer-events:none;opacity:.35}
 body.locked .pchip,body.locked .ptog,body.locked .pg-chip,body.locked .splayer-chip{pointer-events:none}
+body.locked .swap-string-btn{pointer-events:none;opacity:.35}
+body.locked [data-action="slot-str-sel"]{pointer-events:none;cursor:default}
+body.locked [data-action="list-tap"]{pointer-events:none;cursor:default}
 </style>
 </head>
 <body>
@@ -173,7 +176,6 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip,body.locked .splayer-c
   </div>
 
   <div style="display:flex;gap:6px;margin-bottom:.75rem;align-items:stretch">
-    <button class="gen-btn" id="btn-reopt">&#8635; Re-optimize</button>
     <button class="season-add-btn" id="btn-season-add">&#43; Season</button>
     <button class="ledger-btn" id="btn-ledger">&#128200; Ledger</button>
     <button class="lock-btn" id="lock-btn" title="Lock/unlock">&#128275;</button>
@@ -242,6 +244,7 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip,body.locked .splayer-c
 
   <!-- STRINGS -->
   <div class="panel" id="panel-strings">
+    <button class="gen-btn" id="btn-reopt" style="margin-bottom:.75rem">&#8635; Re-optimize from strings</button>
     <div class="mode-toggle" id="string-mode-toggle">
       <button class="mode-btn active" data-action="set-string-mode" data-val="strings">&#129529; Two-string mode</button>
       <button class="mode-btn" data-action="set-string-mode" data-val="open">&#127915; Open rotation</button>
