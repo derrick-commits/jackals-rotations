@@ -225,7 +225,8 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
   <!-- ATTENDANCE -->
   <div class="panel" id="panel-attend">
     <div class="section-label">Tap to mark absent</div>
-    <div id="attend-grid" style="display:flex;flex-wrap:wrap;gap:7px"></div>
+    <div id="attend-grid" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.75rem"></div>
+    <button style="width:100%;padding:10px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid #1D9E75;background:#d4f0e4;color:#085041" data-action="open-add-player">&#43; Add player to roster</button>
   </div>
 
   <!-- POSITIONS -->
@@ -255,6 +256,42 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
     <div id="settings-summary" style="background:#fff;border-radius:10px;border:.5px solid #ddd;padding:.75rem 1rem;font-size:13px;color:#555;line-height:1.7"></div>
   </div>
 
+  <!-- ADD PLAYER MODAL -->
+  <div class="modal-backdrop" id="add-player-modal">
+    <div class="modal-box">
+      <div class="modal-title">&#43; Add player</div>
+      <div class="modal-label">Name</div>
+      <input id="new-player-name" class="modal-date" type="text" placeholder="e.g. Marcus" style="margin-bottom:.75rem">
+      <div class="modal-label">Allowed positions</div>
+      <div id="new-player-pos" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem">
+        <div class="ptog" data-newpos="1">PG</div>
+        <div class="ptog" data-newpos="2">2</div>
+        <div class="ptog" data-newpos="3">3</div>
+        <div class="ptog" data-newpos="4">4</div>
+        <div class="ptog" data-newpos="5">5</div>
+      </div>
+      <div id="add-player-err" style="font-size:12px;color:#993C1D;margin-bottom:.5rem;min-height:16px"></div>
+      <div class="modal-btns">
+        <button class="modal-btn cancel" id="add-player-cancel">Cancel</button>
+        <button class="modal-btn confirm" id="add-player-confirm">Add to roster</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT MODAL -->
+  <div class="modal-backdrop" id="import-modal">
+    <div class="modal-box">
+      <div class="modal-title">&#8681; Import snapshots</div>
+      <div style="font-size:13px;color:#666;margin-bottom:.75rem">Paste the code you exported from your other device:</div>
+      <textarea id="import-text" style="width:100%;height:120px;border-radius:8px;border:1.5px solid #ccc;padding:8px;font-size:13px;font-family:monospace;resize:none;color:#1a1a1a" placeholder="Paste export code here..."></textarea>
+      <div id="import-err" style="font-size:12px;color:#993C1D;margin-top:4px;min-height:16px"></div>
+      <div class="modal-btns" style="margin-top:.75rem">
+        <button class="modal-btn cancel" id="import-cancel">Cancel</button>
+        <button class="modal-btn confirm" id="import-confirm">Import</button>
+      </div>
+    </div>
+  </div>
+
   <!-- DATE MODAL -->
   <div class="modal-backdrop" id="date-modal">
     <div class="modal-box">
@@ -272,7 +309,7 @@ body.locked .pchip,body.locked .ptog,body.locked .pg-chip{pointer-events:none}
 
 <script>
 // ─── Data ──────────────────────────────────────────────────────────────────
-const ALL=['Jordan','Timothy','Henry','Walker','Nathan','Cora','Judah','Evelyn','Evalyn','Tommy'];
+let ALL=['Jordan','Timothy','Henry','Walker','Nathan','Cora','Judah','Evelyn','Evalyn','Tommy'];
 const POS_NAMES=['PG','2','3','4','5'];
 
 // League definitions
@@ -307,7 +344,36 @@ let schedule=[];
 let currentSlot=0;
 let seasonGames=[];
 let viewingGame='totals';
-let snapshots=[]; // [{label, date, absent, schedule, currentSlot, pgOrder, allowedPos, playerPriority, slotMins, leagueId}]
+let snapshots=[];
+
+// ── Hardcoded Game 1 from Jun 20 ──────────────────────────────────────────
+const GAME1_SCHEDULE=[
+  {label:'0–8',  quarter:'Half 1', qStart:false, isHalf:false, p1:'Jordan', p2:'Timothy',p3:'Henry', p4:'Walker',p5:'Cora',  bench:['Judah','Evalyn','Tommy']},
+  {label:'8–16', quarter:'Half 1', qStart:false, isHalf:false, p1:'Walker', p2:'Judah',  p3:'Tommy', p4:'Evalyn',p5:'Cora',  bench:['Jordan','Timothy','Henry']},
+  {label:'16–24',quarter:'Half 2', qStart:true,  isHalf:true,  p1:'Cora',  p2:'Jordan', p3:'Timothy',p4:'Henry', p5:'Judah', bench:['Walker','Evalyn','Tommy']},
+  {label:'24–32',quarter:'Half 2', qStart:false, isHalf:false, p1:'Judah', p2:'Walker', p3:'Tommy', p4:'Evalyn',p5:'Jordan', bench:['Timothy','Henry','Cora']},
+];
+const GAME1_ABSENT=['Nathan','Evelyn'];
+const GAME1_STATS=(()=>{
+  const st={};
+  ['Jordan','Timothy','Henry','Walker','Nathan','Cora','Judah','Evelyn','Evalyn','Tommy'].forEach(p=>{
+    st[p]={pg:0,p2:0,p3:0,p4:0,p5:0,total:0,absent:GAME1_ABSENT.includes(p)};
+  });
+  GAME1_SCHEDULE.forEach(slot=>{
+    [[slot.p1,'pg'],[slot.p2,'p2'],[slot.p3,'p3'],[slot.p4,'p4'],[slot.p5,'p5']].forEach(([p,k])=>{
+      if(st[p]){st[p][k]+=8;st[p].total+=8;}
+    });
+  });
+  return st;
+})();
+
+function initSeasonGames(){
+  return [{
+    label:'Game 1', date:'Jun 20, 2026',
+    stats:GAME1_STATS, absentList:GAME1_ABSENT,
+    schedule:GAME1_SCHEDULE, slotMins:8
+  }];
+}
 
 function present(){return ALL.filter(p=>!absent.has(p));}
 function canPlay(p,pos){return allowedPos[p]&&allowedPos[p].includes(pos);}
@@ -315,23 +381,25 @@ function getPriority(p){return playerPriority[p]||'normal';}
 
 // ─── Persist ───────────────────────────────────────────────────────────────
 function persist(){
-  try{localStorage.setItem('jackals_v1',JSON.stringify({absent:[...absent],allowedPos,playerPriority,pgOrder,schedule,currentSlot,seasonGames,leagueId,slotMins,snapshots}));}catch(e){}
+  try{localStorage.setItem('jackals_v1',JSON.stringify({ALL,absent:[...absent],allowedPos,playerPriority,pgOrder,schedule,currentSlot,seasonGames,leagueId,slotMins,snapshots}));}catch(e){}
 }
 function restore(){
   try{
     const d=JSON.parse(localStorage.getItem('jackals_v1')||'null');
-    if(!d)return;
+    if(!d){seasonGames=initSeasonGames();return;}
+    if(d.ALL&&d.ALL.length)ALL=d.ALL;
     absent=new Set(d.absent||[]);
     if(d.allowedPos)allowedPos=d.allowedPos;
     if(d.playerPriority)playerPriority=d.playerPriority;
     if(d.pgOrder)pgOrder=d.pgOrder;
     if(d.schedule)schedule=d.schedule;
     if(d.currentSlot!=null)currentSlot=d.currentSlot;
-    if(d.seasonGames)seasonGames=d.seasonGames;
+    if(d.seasonGames&&d.seasonGames.length)seasonGames=d.seasonGames;
+    else seasonGames=initSeasonGames();
     if(d.leagueId)leagueId=d.leagueId;
     if(d.slotMins)slotMins=d.slotMins;
     if(d.snapshots)snapshots=d.snapshots;
-  }catch(e){}
+  }catch(e){seasonGames=initSeasonGames();}
 }
 
 // ─── Tab switching ─────────────────────────────────────────────────────────
@@ -352,13 +420,65 @@ function renderAttend(){
   const g=document.getElementById('attend-grid');
   g.innerHTML='';
   ALL.forEach(p=>{
+    const wrap=document.createElement('div');
+    wrap.style.cssText='display:flex;align-items:center;gap:3px';
     const c=document.createElement('div');
     c.className='pchip '+(absent.has(p)?'absent':'present');
     c.textContent=p;
     c.dataset.player=p;
     c.dataset.action='toggle-absent';
-    g.appendChild(c);
+    const del=document.createElement('div');
+    del.textContent='✕';
+    del.title='Remove from roster';
+    del.style.cssText='font-size:11px;color:#bbb;cursor:pointer;padding:2px 4px;border-radius:4px;line-height:1';
+    del.dataset.action='remove-player';
+    del.dataset.player=p;
+    wrap.appendChild(c);wrap.appendChild(del);
+    g.appendChild(wrap);
   });
+}
+
+// ─── Add / remove player ───────────────────────────────────────────────────
+let newPlayerPositions=[];
+
+function openAddPlayerModal(){
+  document.getElementById('new-player-name').value='';
+  document.getElementById('add-player-err').textContent='';
+  newPlayerPositions=[];
+  document.querySelectorAll('#new-player-pos .ptog').forEach(b=>b.classList.remove('on'));
+  document.getElementById('add-player-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('new-player-name').focus(),100);
+}
+function closeAddPlayerModal(){document.getElementById('add-player-modal').classList.remove('open');}
+
+function confirmAddPlayer(){
+  const name=document.getElementById('new-player-name').value.trim();
+  const err=document.getElementById('add-player-err');
+  if(!name){err.textContent='Please enter a name.';return;}
+  if(ALL.some(p=>p.toLowerCase()===name.toLowerCase())){err.textContent='A player with that name already exists.';return;}
+  if(newPlayerPositions.length===0){err.textContent='Select at least one position.';return;}
+  ALL.push(name);
+  allowedPos[name]=[...newPlayerPositions].sort((a,b)=>a-b);
+  playerPriority[name]='normal';
+  // Add to absent by default so coach consciously marks them present
+  absent.add(name);
+  schedule=[];persist();
+  closeAddPlayerModal();
+  renderAttend();
+  showMsg(name+' added to roster. Mark them present in Attendance when they show up.','success-msg');
+}
+
+function removePlayer(name){
+  const idx=ALL.indexOf(name);
+  if(idx===-1)return;
+  ALL.splice(idx,1);
+  absent.delete(name);
+  delete allowedPos[name];
+  delete playerPriority[name];
+  pgOrder=pgOrder.filter(p=>p!==name);
+  schedule=[];persist();
+  renderAttend();
+  showMsg(name+' removed from roster.','success-msg');
 }
 
 // ─── Positions ─────────────────────────────────────────────────────────────
@@ -673,13 +793,78 @@ function deleteSnapshot(idx){
   persist();renderSeason();
 }
 
+function exportSnapshots(){
+  if(!snapshots.length&&!seasonGames.length){showMsg('Nothing to export yet.','warn');return;}
+  const payload=btoa(JSON.stringify({snapshots,seasonGames}));
+  // Try clipboard first, fall back to showing the code
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(payload).then(()=>{
+      showMsg('Export code copied to clipboard! Paste it on your other device.','success-msg');
+    }).catch(()=>showExportCode(payload));
+  } else {
+    showExportCode(payload);
+  }
+}
+
+function showExportCode(code){
+  // Show the code in the import modal repurposed as display
+  document.getElementById('import-text').value=code;
+  document.getElementById('import-modal').classList.add('open');
+  document.querySelector('#import-modal .modal-title').textContent='📤 Your export code';
+  document.querySelector('#import-modal div[style*="Paste"]').textContent='Copy this code and paste it on your other device:';
+  document.getElementById('import-confirm').style.display='none';
+}
+
+function openImportModal(){
+  document.getElementById('import-text').value='';
+  document.getElementById('import-err').textContent='';
+  document.querySelector('#import-modal .modal-title').textContent='⬇ Import snapshots';
+  document.querySelector('#import-modal div[style*="Paste"]').textContent='Paste the code you exported from your other device:';
+  document.getElementById('import-confirm').style.display='';
+  document.getElementById('import-modal').classList.add('open');
+}
+
+function closeImportModal(){document.getElementById('import-modal').classList.remove('open');}
+
+function confirmImport(){
+  const raw=document.getElementById('import-text').value.trim();
+  if(!raw){document.getElementById('import-err').textContent='Please paste an export code.';return;}
+  try{
+    const data=JSON.parse(atob(raw));
+    let added=0;
+    if(data.snapshots&&data.snapshots.length){
+      // Merge — avoid duplicates by timestamp
+      const existing=new Set(snapshots.map(s=>s.timestamp+s.summary));
+      data.snapshots.forEach(s=>{
+        if(!existing.has(s.timestamp+s.summary)){snapshots.push(s);added++;}
+      });
+      snapshots.forEach((s,i)=>s.label='Snapshot '+(i+1));
+    }
+    if(data.seasonGames&&data.seasonGames.length){
+      const existingG=new Set(seasonGames.map(g=>g.date+g.label));
+      data.seasonGames.forEach(g=>{
+        if(!existingG.has(g.date+g.label)) seasonGames.push(g);
+      });
+      seasonGames.forEach((g,i)=>g.label='Game '+(i+1));
+    }
+    persist();closeImportModal();renderSeason();
+    showMsg(added+' snapshot(s) imported successfully!','success-msg');
+  }catch(e){
+    document.getElementById('import-err').textContent='Invalid code — make sure you copied the full export.';
+  }
+}
+
 function renderSeason(){
   const el=document.getElementById('season-content');
 
   // ── Snapshots section ──
   let html='<div style="margin-bottom:1.25rem">'
     +'<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">&#128190; Game snapshots</div>'
-    +'<button class="snap-save-btn" data-action="save-snapshot">&#128190; Save current roster &amp; schedule as snapshot</button>';
+    +'<button class="snap-save-btn" data-action="save-snapshot">&#128190; Save current roster &amp; schedule as snapshot</button>'
+    +'<div style="display:flex;gap:8px;margin-bottom:.75rem">'
+    +'<button style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #378ADD;background:#dbeeff;color:#0C447C" data-action="export-snapshots">&#8679; Export to other device</button>'
+    +'<button style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid #888;background:#f0f0f0;color:#444" data-action="import-snapshots">&#8681; Import from other device</button>'
+    +'</div>';
 
   if(snapshots.length===0){
     html+='<div style="color:#bbb;font-size:13px;font-style:italic">No snapshots yet. Save one before changing settings so you can restore if needed.</div>';
@@ -712,13 +897,14 @@ function renderSeason(){
   });
   tabs+='<div class="sgame-tab totals'+(viewingGame==='totals'?' active':'')+'" data-action="view-season" data-idx="totals">Season totals</div></div>';
 
-  let gs,gLabel,showDel=false,gIdx=-1;
+  let gs,gLabel,showDel=false,gIdx=-1,gameSchedule=null,gameSlotMins=8;
   if(viewingGame==='totals'){
     gLabel='Season totals — all games';
     gs={};ALL.forEach(p=>{gs[p]={pg:0,p2:0,p3:0,p4:0,p5:0,total:0,gamesPlayed:0,gamesAbsent:0};});
     seasonGames.forEach(g=>{ALL.forEach(p=>{const s=g.stats[p]||{};gs[p].pg+=(s.pg||0);gs[p].p2+=(s.p2||0);gs[p].p3+=(s.p3||0);gs[p].p4+=(s.p4||0);gs[p].p5+=(s.p5||0);gs[p].total+=(s.total||0);if(s.absent)gs[p].gamesAbsent++;else gs[p].gamesPlayed++;});});
   }else{
     gIdx=viewingGame;const g=seasonGames[gIdx];gLabel=g.label+' — '+g.date;gs=g.stats;showDel=true;
+    gameSchedule=g.schedule||null;gameSlotMins=g.slotMins||8;
   }
   const sorted=[...ALL].sort((a,b)=>(gs[b]?.total||0)-(gs[a]?.total||0));
   const cell=v=>v>0?'<td class="pos-cell">'+v+'m</td>':'<td style="color:#ddd">—</td>';
@@ -734,7 +920,35 @@ function renderSeason(){
       +'<button class="del-no" data-action="del-cancel" data-idx="'+gIdx+'">No</button>'
       +'</div></div>';
   }
-  tbl+='</div><div class="season-table-wrap"><table class="season-table"><thead><tr>'
+  tbl+='</div>';
+
+  // Rotation table for individual games
+  if(gameSchedule&&gameSchedule.length){
+    tbl+='<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;margin-top:.25rem">Rotation</div>';
+    tbl+='<div class="season-table-wrap" style="margin-bottom:1rem"><table class="season-table">'
+      +'<thead><tr><th class="left">Time</th><th class="left">PG</th><th class="left">2</th><th class="left">3</th><th class="left">4</th><th class="left">5</th><th class="left">Bench</th></tr></thead><tbody>';
+    let lastQ='';
+    gameSchedule.forEach(slot=>{
+      if(slot.quarter!==lastQ&&lastQ!==''){
+        tbl+='<tr><td colspan="7" style="background:#fff8e8;font-size:11px;font-weight:600;color:#633806;padding:4px 8px">&#9201; '+(slot.isHalf?'Halftime':slot.quarter)+'</td></tr>';
+      }
+      lastQ=slot.quarter;
+      tbl+='<tr>'
+        +'<td style="font-weight:700;color:#1a1a1a;white-space:nowrap">'+slot.label+'</td>'
+        +'<td style="color:#085041;font-weight:600">'+slot.p1+'</td>'
+        +'<td style="color:#0C447C">'+slot.p2+'</td>'
+        +'<td style="color:#0C447C">'+slot.p3+'</td>'
+        +'<td style="color:#0C447C">'+slot.p4+'</td>'
+        +'<td style="color:#0C447C">'+slot.p5+'</td>'
+        +'<td style="color:#999;font-size:12px">'+(slot.bench||[]).join(', ')+'</td>'
+        +'</tr>';
+    });
+    tbl+='</tbody></table></div>';
+  }
+
+  // Minutes breakdown table
+  tbl+='<div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Minutes by position</div>';
+  tbl+='<div class="season-table-wrap"><table class="season-table"><thead><tr>'
     +'<th class="left">Player</th><th>PG</th><th>Pos 2</th><th>Pos 3</th><th>Pos 4</th><th>Pos 5</th>'
     +'<th>'+(viewingGame==='totals'?'Season total':'Game total')+'</th>'
     +(viewingGame==='totals'?'<th>Games</th>':'')
@@ -779,7 +993,7 @@ function confirmCommit(){
   const dl=new Date(+y,+m-1,+d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   closeDateModal();
   const label='Game '+(seasonGames.length+1);
-  seasonGames.push({label,date:dl,stats:calcGameStats(schedule,[...absent]),absentList:[...absent]});
+  seasonGames.push({label,date:dl,stats:calcGameStats(schedule,[...absent]),absentList:[...absent],schedule:JSON.parse(JSON.stringify(schedule)),slotMins});
   showMsg(label+' ('+dl+') added!','success-msg');
   persist();
   if(document.getElementById('panel-season').classList.contains('active'))renderSeason();
@@ -837,6 +1051,12 @@ document.addEventListener('click',function(e){
     absent.has(p)?absent.delete(p):absent.add(p);
     renderAttend();schedule=[];renderCourt();persist();
   }
+  else if(action==='open-add-player'){
+    openAddPlayerModal();
+  }
+  else if(action==='remove-player'){
+    removePlayer(el.dataset.player);
+  }
   else if(action==='toggle-pos'){
     const p=el.dataset.player,n=+el.dataset.pos;
     if(!allowedPos[p])allowedPos[p]=[];
@@ -852,6 +1072,12 @@ document.addEventListener('click',function(e){
     const idx=el.dataset.idx;
     viewingGame=idx==='totals'?'totals':+idx;
     renderSeason();
+  }
+  else if(action==='export-snapshots'){
+    exportSnapshots();
+  }
+  else if(action==='import-snapshots'){
+    openImportModal();
   }
   else if(action==='save-snapshot'){
     saveSnapshot();
@@ -921,8 +1147,22 @@ document.getElementById('btn-ledger').addEventListener('click',()=>switchTab('se
 document.getElementById('lock-btn').addEventListener('click',toggleLock);
 document.getElementById('prev-btn').addEventListener('click',()=>{currentSlot=Math.max(0,currentSlot-1);renderCourt();persist();});
 document.getElementById('next-btn').addEventListener('click',()=>{currentSlot=Math.min(schedule.length-1,currentSlot+1);renderCourt();persist();});
+// New player position toggles (inside modal, use data-newpos)
+document.getElementById('new-player-pos').addEventListener('click',function(e){
+  const btn=e.target.closest('[data-newpos]');
+  if(!btn)return;
+  const pos=+btn.dataset.newpos;
+  const idx=newPlayerPositions.indexOf(pos);
+  if(idx>=0)newPlayerPositions.splice(idx,1);else newPlayerPositions.push(pos);
+  btn.classList.toggle('on',newPlayerPositions.includes(pos));
+});
+
+document.getElementById('add-player-cancel').addEventListener('click',closeAddPlayerModal);
+document.getElementById('add-player-confirm').addEventListener('click',confirmAddPlayer);
 document.getElementById('modal-cancel').addEventListener('click',closeDateModal);
 document.getElementById('modal-confirm').addEventListener('click',confirmCommit);
+document.getElementById('import-cancel').addEventListener('click',closeImportModal);
+document.getElementById('import-confirm').addEventListener('click',confirmImport);
 
 // Tabs
 document.querySelectorAll('#tab-row .tab').forEach(tab=>{
