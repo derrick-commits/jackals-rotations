@@ -919,8 +919,17 @@ document.addEventListener('click',function(e){
   else if(action==='remove-player')removePlayer(el.dataset.player);
   else if(action==='open-add-player')openAddPlayerModal();
   else if(action==='add-string'){
-    var idx=stringList.length;var c=STRING_COLORS[idx%STRING_COLORS.length];
-    stringList.push({id:'s'+(idx+1)+'_'+Date.now(),name:'String '+(idx+1),color:c.color,bg:c.bg,lineup:{1:null,2:null,3:null,4:null,5:null}});
+    // Name: smallest "String N" not already in use (avoids duplicates after deletions)
+    var usedNames={};
+    stringList.forEach(function(s){usedNames[s.name]=1;});
+    var n=1;while(usedNames['String '+n])n++;
+    // Color: prefer one not currently in use
+    var usedColors={};
+    stringList.forEach(function(s){usedColors[s.color]=1;});
+    var c=null;
+    for(var ci=0;ci<STRING_COLORS.length;ci++){if(!usedColors[STRING_COLORS[ci].color]){c=STRING_COLORS[ci];break;}}
+    if(!c)c=STRING_COLORS[stringList.length%STRING_COLORS.length];
+    stringList.push({id:'str_'+Date.now()+'_'+Math.floor(Math.random()*100000),name:'String '+n,color:c.color,bg:c.bg,lineup:{1:null,2:null,3:null,4:null,5:null}});
     persist();renderStrings();
   }
   else if(action==='del-string'){
